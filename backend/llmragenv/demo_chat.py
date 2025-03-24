@@ -23,6 +23,20 @@ from logger import Logger
 import subprocess
 
 class Demo_chat:
+
+    # 模型到 URL 的映射表
+    Model_Url_Mapping = {
+        "zhipu": "https://open.bigmodel.cn/api/paas/v4",
+        "moonshot": "https://api.moonshot.cn/v1",
+        "baichuan": "https://api.baichuan-ai.com/v1",
+        "qwen": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+        "lingyiwanwu": "https://api.lingyiwanwu.com/v1",
+        "deepseek": "https://api.deepseek.com",
+        "doubao": "https://ark.cn-beijing.volces.com/api/v3",
+        "gpt": "https://api.aigc798.com/v1/",
+        "llama": "http://localhost:11434/v1",  # 本地 Ollama
+    }
+
     def __init__(self,
                  model_name,
                  dataset,
@@ -33,8 +47,7 @@ class Demo_chat:
                  keywords=None,
                  pruning=False,
                  strategy="default",
-                 api_key="ollama",
-                 url="http://localhost:11434/v1"):
+                 api_key="ollama"):
         """
         初始化 Demo_chat 类。
 
@@ -58,7 +71,8 @@ class Demo_chat:
         self.pruning = pruning
         self.strategy = strategy
         self.api_key = api_key
-        self.url = url
+        #自动匹配 URL
+        self.url = self.Model_Url_Mapping.get(model_name, "http://localhost:11434/v1")  # 若没有匹配上的模型，则默认使用 Ollama
         self.llm = self.load_llm(self.model_name,self.url,self.api_key)
         self.vectordb = MilvusDB(dataset, 1024, overwrite=False, store=True,retriever=True)
         self.graphdb = GraphDBFactory("nebulagraph").get_graphdb(space_name='rgb')
