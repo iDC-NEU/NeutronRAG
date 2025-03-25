@@ -2,12 +2,16 @@ import json
 import re
 import time
 from flask import Flask, Response, request, jsonify, render_template, session
+# from flask_socketio import SocketIO
+from watchdog.observers import Observer
+from watchdog.events import FileSystemEventHandler
 from flask_cors import CORS  # Import CORS
 from zhipuai import ZhipuAI
 from user import User  # 假设你的 User 类定义在 user.py 中
 from llmragenv.llmrag_env import LLMRAGEnv
 from evaluator import simulate  # Import simulate module
 from llmragenv.demo_chat import Demo_chat
+import threading
 
 app = Flask(__name__)
 app.secret_key = 'ac1e22dfb44b87ef38f5bf2cd1cb0c6f93bb0a67f1b2d8f7'  # 用于 flash 消息

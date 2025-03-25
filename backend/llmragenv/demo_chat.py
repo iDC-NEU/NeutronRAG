@@ -2,7 +2,7 @@
 Author: lpz 1565561624@qq.com
 Date: 2025-03-19 20:28:13
 LastEditors: lpz 1565561624@qq.com
-LastEditTime: 2025-03-21 10:37:48
+LastEditTime: 2025-03-25 23:13:24
 FilePath: /lipz/NeutronRAG/NeutronRAG/backend/llmragenv/demo_chat.py
 Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
 '''
@@ -47,7 +47,10 @@ class Demo_chat:
                  keywords=None,
                  pruning=False,
                  strategy="default",
-                 api_key="ollama"):
+                 api_key="ollama",
+                 url="http://localhost:11434/v1",
+                 path_name="untitled"):
+
         """
         初始化 Demo_chat 类。
 
@@ -78,8 +81,8 @@ class Demo_chat:
         self.graphdb = GraphDBFactory("nebulagraph").get_graphdb(space_name='rgb')
         self.chat_graph = ChatGraphRAG(self.llm, self.graphdb)
         self.chat_vector = ChatVectorRAG(self.llm,self.vectordb)
-        #TODO 这里我就不定义 chat_hybrid了，避免多次查询。 写的时候可以先根据自己的理解重构ChatGraphRAG，ChatVectorRAG中的检索并传入Demo_chat类中的相关参数，
-        #然后在这个类中再定义一个hybrid_chat()方法，和定义存储查询结果的属性
+        self.path_name = path_name
+
 
 
         
@@ -97,6 +100,21 @@ class Demo_chat:
         response = self.llm.chat_with_ai(prompt = "How are you today",history = None)
         return response
 
+
+
+#TODO XINBO 这个函数我想的是后端实现历史信息的读取与生成，首先我们根据 self.path_name找到要生成的路径（若没有则自动创建）， 如果有 则看里面是否有内容，如果有内容，看是继续生成还是重新生成（is_continue参数）
+# 这个路径里还是串行生成（这个目前卡有限，之后再看是否加并行优化）三个json文件吧（对于一个item，先生成vector，再生成graph。然后根据strategy生成hybrid（hybrid_chat我还没写之后我再加上））对于生成的格式(graph和vector的既要有生成指标也要有检索指标)
+
+# 至于Evaluator我大概后天写完，当需要用到评估值时，写自己写一个值代替吧
+
+
+    def history_chat(self,is_continue:bool):
+
+
+
+        return
+
+    # def hybrid_chat(self,strategy):
 
         
 #为了实现切换模型和停止生成时资源的立即释放
