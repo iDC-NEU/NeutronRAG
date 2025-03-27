@@ -521,6 +521,7 @@ class Evaluator:
                 retrieval_result, ground_truth_context, mode=self.mode)
         
         result = {
+        "strategy":"vector",
         "metrics": {
             "retrieval_metrics": {
                 "precision": {precision_scores},

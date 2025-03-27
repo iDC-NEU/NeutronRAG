@@ -1,0 +1,73 @@
+server:
+  ui_port: 8083
+  ui_share: false
+
+
+
+llm:
+  zhipu:
+    url: https://open.bigmodel.cn/api/paas/v4
+    key: YOUR API-KEY
+    # MODEL_NAME=glm-4
+
+  moonshot:
+    url: https://api.moonshot.cn/v1
+    key: YOUR API-KEY
+    # MODEL_NAME=moonshot-v1-8k
+
+  baichuan:
+    url: https://api.baichuan-ai.com/v1
+    key: YOUR API-KEY
+    # MODEL_NAME=Baichuan4
+
+  qwen:
+    url: https://dashscope.aliyuncs.com/compatible-mode/v1
+    key: YOUR API-KEY
+    # MODEL_NAME=qwen-long
+
+  lingyiwanwu:
+    url: https://api.lingyiwanwu.com/v1
+    key: YOUR API-KEY
+    # MODEL_NAME=yi-large
+
+  deepseek:
+    url: https://api.deepseek.com
+    key: YOUR API-KEY
+    # MODEL_NAME=deepseek-chat
+
+  doubao:
+    url: https://ark.cn-beijing.volces.com/api/v3
+    key: YOUR API-KEY
+    # 注意：对于豆包api，model_name参数填入ENDPOINT_ID，具体申请操作在豆包api官网提供。
+    # MODEL_NAME=
+
+  gpt:
+    url: https://api.aigc798.com/v1/
+    key: sk-IEnkbBAtmH6L7YuApel4OSTcmdxizcuqpXl4xPTXeaziDA3e
+
+
+  llama:
+    url: http://localhost:11434/v1
+    key: ollama
+    # MODEL_NAME: llama2:70b
+    # MODEL_NAME=llama2:70b
+
+
+
+database:
+
+  neo4j:
+    url: bolt://localhost:7690
+    username: neo4j
+    # 注意数字用引号括起来
+    password: "12345678"
+
+  nebulagraph:
+    url: 127.0.0.1:9669
+    username: root
+    # 注意数字用引号括起来
+    password: "nebula"
+
+
+organization: iDC-NE
+

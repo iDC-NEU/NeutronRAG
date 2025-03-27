@@ -21,6 +21,13 @@ from llmragenv.Cons_Retri.KG_Construction import KGConstruction
 from dataset.dataset import Dataset
 from logger import Logger
 import subprocess
+import os
+import json
+import sys
+home_dir = os.path.expanduser("~")
+evaluator_path = os.path.join(home_dir, "NeutronRAG/backend/evaluator")
+sys.path.append(evaluator_path)
+from evaluator import Evaluator
 
 class Demo_chat:
 
@@ -82,7 +89,7 @@ class Demo_chat:
         self.chat_graph = ChatGraphRAG(self.llm, self.graphdb)
         self.chat_vector = ChatVectorRAG(self.llm,self.vectordb)
         self.path_name = path_name
-
+        self.evaluator = Evaluator(data_name=dataset,mode=strategy)
 
 
         
@@ -101,18 +108,71 @@ class Demo_chat:
         return response
 
 
+    def history_chat(self,query_id:int, query:str, response:str, is_continue:bool, result):
 
-#TODO XINBO 这个函数我想的是后端实现历史信息的读取与生成，首先我们根据 self.path_name找到要生成的路径（若没有则自动创建）， 如果有 则看里面是否有内容，如果有内容，看是继续生成还是重新生成（is_continue参数）
-# 这个路径里还是串行生成（这个目前卡有限，之后再看是否加并行优化）三个json文件吧（对于一个item，先生成vector，再生成graph。然后根据strategy生成hybrid（hybrid_chat我还没写之后我再加上））对于生成的格式(graph和vector的既要有生成指标也要有检索指标)
+        if not os.path.exists(self.path_name):
+            os.makedirs(self.path_name)
+            print(f"已创建目录: {self.path_name}") 
+        
+        vector_file = os.path.join(self.path_name, 'vector.json')
+        graph_file = os.path.join(self.path_name, 'graph.json')
+        hybrid_file = os.path.join(self.path_name, 'hybrid.json')
 
-# 至于Evaluator我大概后天写完，当需要用到评估值时，写自己写一个值代替吧
+        vector_data = {
+            "query_id": query_id,
+            "query": query,
+            "response": response
+        }
+        graph_data = {
+            "query_id": query_id,
+            "query": query,
+            "response": response
+        }
+        hybrid_data = {
+            "query_id": query_id,
+            "query": query,
+            "response": response
+        }
 
+        # 假设evaluate_one_query函数会返回一个result列表，分别是vector、graph、hybrid的评估值
+        if not isinstance(result, list):
+            result = [result]
 
-    def history_chat(self,is_continue:bool):
+        for item in result:
+            strategy = item.get("strategy")
+            metrics = item.get("metrics")
+            
+            if strategy == "vector":
+                vector_data.update(metrics)
+            elif strategy == "graph":
+                graph_data.update(metrics)
+            elif strategy == "hybrid":
+                hybrid_data.update(metrics)
+            else:
+                raise ValueError(f"Unknown strategy '{strategy}'. Supported strategies are 'vector'、'graph' and 'hybrid'.")
+                
+        data_mapping = {
+            vector_file: vector_data,
+            graph_file: graph_data,
+            hybrid_file: hybrid_data
+        }
 
+        for file, data in data_mapping.items():
+            if data:
+                # 将set类型转换成list，否则无法插入json文件
+                data = convert_sets(data)
+                print(data)
+                if os.path.exists(file) and is_continue == True:
+                    with open(file, "r", encoding="utf-8") as f:
+                        existing_data = json.load(f)
+                    if isinstance(existing_data, list):
+                        existing_data.append(data)
 
-
-        return
+                    with open(file, "w", encoding="utf-8") as file:
+                        json.dump(existing_data, file, ensure_ascii=False, indent=4)
+                else:
+                    with open(file, "w", encoding="utf-8") as file:
+                        json.dump([data], file, ensure_ascii=False, indent=4)
 
     # def hybrid_chat(self,strategy):
 
@@ -128,8 +188,42 @@ class Demo_chat:
             self.llm = None
             self.model_name = None
 
-        
-    
+
+# 将set类型转换成list
+def convert_sets(obj):
+    if isinstance(obj, set):
+        return list(obj)
+    elif isinstance(obj, dict):
+        return {k: convert_sets(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [convert_sets(v) for v in obj]
+    else:
+        return obj
+
+# 测试history_chat函数
+def test_history_chat():
+    chat = Demo_chat(model_name="llama3:8b",dataset="rgb",strategy="vector", path_name="history_log")
+
+    data_path = "/home/yangxb/NeutronRAG/backend/evaluator/rgb_evidence_test.json"
+    with open(data_path, 'r', encoding='utf-8') as f:
+            dataset= json.load(f)
+
+    for i, item in enumerate(dataset[:10]):
+        query_id = item['id']
+        query = item['query']
+        evidences = item['evidences']
+        response = item['response']
+        result = chat.evaluator.evaluate_one_query(
+                                    query_id=query_id,
+                                    query=query,
+                                    retrieval_result=evidences,
+                                    response=response,
+                                    vector_evidence=data_path,
+                                    graph_evidence=data_path
+                                    )
+        chat.history_chat(query_id=query_id, query=query, response=response, is_continue=True, result=result)
+
+    chat.close()
 
 
 
@@ -137,6 +231,7 @@ if __name__ == "__main__":
     chat = Demo_chat(model_name="llama3:8b",dataset="rgb")
     print(chat.chat_test())
     chat.close()
+    # test_history_chat()
 
 
 
