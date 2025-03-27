@@ -1,8 +1,8 @@
 '''
 Author: fzb fzb0316@163.com
 Date: 2024-09-19 08:48:47
-LastEditors: fzb0316 fzb0316@163.com
-LastEditTime: 2024-11-20 20:04:08
+LastEditors: lpz 1565561624@qq.com
+LastEditTime: 2025-03-27 11:02:30
 FilePath: /RAGWebUi_demo/chat/chat_graphrag.py
 Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
 '''
@@ -192,11 +192,18 @@ class ChatGraphRAG(ChatBase):
 
 
 if __name__ == "__main__":
-    from database.graph.nebulagraph.nebulagraph import NebulaClient
+    from database.graph.nebulagraph.nebulagraph import*
     from llmragenv.LLM.ollama.client import OllamaClient
 
-    graph_db = NebulaClient()
-    llm = OllamaClient()
+    graph_db = NebulaDB()
+    llm = OllamaClient(model_name="llama3:8b",url="http://localhost:11434/v1",key="ollama")
 
-    ChatGraphRAG = ChatGraphRAG(llm,graph_db)
-    print(ChatGraphRAG.extract_keyword(question="Curry is a famous basketball player"))
+    chat_graph = ChatGraphRAG(llm,graph_db)
+    print(chat_graph.retriver_graph.extract_keyword(question="Curry is a famous basketball player"))
+    pruning_knowledge_sequence = chat_graph.retriver_graph.retrieve_2hop(question="Who won the 2022 Tour de France?")
+
+    print(pruning_knowledge_sequence)
+
+
+
+    

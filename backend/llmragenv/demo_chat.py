@@ -2,7 +2,7 @@
 Author: lpz 1565561624@qq.com
 Date: 2025-03-19 20:28:13
 LastEditors: lpz 1565561624@qq.com
-LastEditTime: 2025-03-25 23:13:24
+LastEditTime: 2025-03-27 10:34:48
 FilePath: /lipz/NeutronRAG/NeutronRAG/backend/llmragenv/demo_chat.py
 Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
 '''
@@ -46,7 +46,7 @@ class Demo_chat:
                  k_hop=2,
                  keywords=None,
                  pruning=False,
-                 strategy="default",
+                 strategy="Union",
                  api_key="ollama",
                  url="http://localhost:11434/v1",
                  path_name="untitled"):
@@ -99,6 +99,18 @@ class Demo_chat:
     def chat_test(self):
         response = self.llm.chat_with_ai(prompt = "How are you today",history = None)
         return response
+
+
+    # 为了不浪费 chat_vector 和 chat_graph的检索结果
+    def hybrid_chat(self):
+        retrieval_text = self.chat_vector.retrieval_result()
+        retrieval_graph = self.chat_graph.retrieval_result()
+        retrieval_result = ""
+        if self.strategy == "Union":
+            retrieval_result = retrieval_text+retrieval_graph
+        elif self.strategy == "Intersection":
+        
+
 
 
 

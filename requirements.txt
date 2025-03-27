@@ -36,3 +36,4 @@ overrides==7.7.0
 cupy-cuda11x
 rouge-score==0.1.2
 ragas==0.2.14
+watchdog==6.0.0

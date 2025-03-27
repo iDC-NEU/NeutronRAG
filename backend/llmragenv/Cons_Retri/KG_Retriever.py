@@ -2,7 +2,7 @@
 Author: fzb fzb0316@163.com
 Date: 2024-09-19 08:48:47
 LastEditors: lpz 1565561624@qq.com
-LastEditTime: 2025-02-09 23:27:41
+LastEditTime: 2025-03-27 10:40:43
 FilePath: /RAGWebUi_demo/llmragenv/Retriever/retriever_graph.py
 Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
 '''
@@ -273,6 +273,5 @@ class RetrieverGraph(object):
                                     reverse=True)
 
         return sorted_all_rel_scores[:topk]
-
 
 
