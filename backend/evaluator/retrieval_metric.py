@@ -219,6 +219,7 @@ class RetrievalEvaluator:
         return numerator / denominator if denominator != 0 else 0
 
     def evaluation_precision(self, retrieved_context, ground_truth_context):
+        print(ground_truth_context)
         """
         Calculate the retrieval precision metric.
 
@@ -236,10 +237,12 @@ class RetrievalEvaluator:
              in ground_truth_context else 0) * self.weight(i + 1)
             for i in range(len(retrieved_context))
         )
+        print("numerator",numerator)
 
         # Calculate the denominator
         denominator = sum(self.weight(t)
                           for t in range(1, len(ground_truth_context) + 1))
+        print("denominator",denominator)
 
         # Return retrieval precision
         return numerator / denominator if denominator != 0 else 0

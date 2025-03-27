@@ -2,7 +2,7 @@
 Author: lpz 1565561624@qq.com
 Date: 2025-03-25 22:46:59
 LastEditors: lpz 1565561624@qq.com
-LastEditTime: 2025-03-26 20:39:51
+LastEditTime: 2025-03-27 09:50:19
 FilePath: /lipz/NeutronRAG/NeutronRAG/backend/evaluator/evaluator.py
 Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AEn
 '''
@@ -487,6 +487,7 @@ class Evaluator:
             print(f"No evidence found for query ID {query_id}")
             return None
         
+        print("is checkanswer")
         if self.data_type == 'qa':
             exact_match = self.qa_evalutor.checkanswer(
                     response, ground_truth)
@@ -498,17 +499,20 @@ class Evaluator:
             rougeL_score = rouge_score
             answer_correctness = anwser_accuracy_by_ragas
         
-
+        print("is evaluate_hallucinations")
         hallucinations_score = -1
-        hallucinations_score = self.ragas_evalutor.evaluate_hallucinations(
-                    query, response,  retrieval_result)
+        
+        # hallucinations_score = self.ragas_evalutor.evaluate_hallucinations(
+        #             query, response,  retrieval_result)
         
         ground_truth_context = vector_evidence_item["evidences"]
         if isinstance(ground_truth_context, str):
             ground_truth_context = [ground_truth_context]
         else:
             ground_truth_context = list(ground_truth_context.values())
+        ground_truth_context = set(ground_truth_context)
 
+        print("is evaluation_precision")
         precision_scores = self.retrieval_evalutor.evaluation_precision(
                 retrieval_result, ground_truth_context)
         relevance_scores =   self.retrieval_evalutor.evaluation_relevance(
@@ -646,7 +650,7 @@ if __name__ == '__main__':
 
     evalutor_test = Evaluator(data_name="rgb",mode="vector")
 #  /home/chency/NeutronRAG/neutronrag/results/response/rgb/vectorrag/top5_2024-11-26_21-32-23.json
-    retrieve_results = ["Your stage-by-stage guide to the winners of the 2022 Tour","THE STAGE WINNERS OF THE 2022 TOUR DE FRANCE."]
+    retrieve_results = ["Your stage-by-stage guide to the winners of the 2022 Tour","Your stage-by-stage guide to the winners of the 2022 Tour. Denmark's Jonas Vingegaard (Jumbo-Visma) won the yellow jersey as the overall winner of the 2022 Tour de France. The 25-year-old outlasted two-time defending champion Tadej Pogačar (UAE Team Emirates) of Slovenia to win his first Tour. Pogačar finished second, 2:43 back of Vingegaard, and Great Britain's Geraint Thomas (INEOS Grenadiers) was third, 7:22 behind the lead, to round out the podium for the Tour's General Classification. Here’s a look at how every stage of the 2022 Tour unfolded.  Results From Every Stage Full Leaderboard Who Won the Tour? Surrounded by his teammates, Denmark’s Jonas Vingegaard (Jumbo-Visma) finished safely behind the peloton at the end of Stage 21 in Paris to win the 2022 Tour de France. The Dane won the Tour by 3:34 over Slovenia’s Tadej Pogačar (UAE Team Emirates), who started the race as the two-time defending champion, and 8:13 over Great Britain’s Geraint Thomas (INEOS Grenadiers), who won the Tour in 2018 and finished second in 2019."]
     result = evalutor_test.evaluate_one_query(query_id=83,query="Who won the 2022 Tour de France?",retrieval_result=retrieve_results,response="Denmark's Jonas Vingegaard (Jumbo-Visma) won the yellow jersey as the overall winner of the 2022 Tour de France.",
                                      vector_evidence="rgb_evidence_test.json",graph_evidence="rgb_evidence_test.json")
     
