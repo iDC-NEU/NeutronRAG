@@ -8,7 +8,7 @@ from llama_index.core import (
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 from typing import Literal
 # from dataprocess.kg_extract import llm_kg_extract
-from pruning import *
+from .pruning import *
 import os
 import re
 import math
