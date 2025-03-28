@@ -1,23 +1,18 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>NeutronRAG Demo</title>
     <link rel="stylesheet" href="../static/css/demo.css">
-  	<link rel="stylesheet" href="../static/css/analysis.css">
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/gauge.js/1.3.5/gauge.min.js"></script>
     <script src="https://unpkg.com/cytoscape/dist/cytoscape.min.js"></script>
 </head>
 <body>
     <div class="container">
-        <!-- 头部 -->
         <header class="header">
             <div class="title">
-                <h1> <img src="https://raw.githubusercontent.com/SciEcon/img/main/202312151408537.png" alt="Logo" class="logo"> NeutronRAG Demo</h1>
+                <h1>NeutronRAG Demo</h1>
                 <h2 class="subtitle">Multi-Dimension Feedback</h2>
             </div>
             <input type="text" placeholder="请输入内容..." id="user-input" class="input-box">
@@ -27,7 +22,6 @@
             </div>
         </header>
 
-        <!-- 左侧栏：下拉菜单 -->
         <aside class="left-sidebar">
             <div class="sidebar-section">
                 <div class="sidebar-header" onclick="toggleSidebarSection(this)">
@@ -45,37 +39,37 @@
                     </div>
                     <div class="input-group">
                         <label for="api-key-input">API-KEY:</label>
-                        <input type="text" id="api-key-input" name="api-key-input" value="">
+                        <input type="text" id="api-key-input" name="api-key-input" value="" placeholder="Enter API Key (if required)">
                     </div>
                     <div class="sidebar-section-inner">
                         <div class="sidebar-header-inner" onclick="toggleSidebarSection(this)">
-                            <h3>Dataset</h3>
+                            <h3>Dataset Dimensions</h3>
                             <i class="material-icons">expand_more</i>
                         </div>
                         <div class="sidebar-content-inner">
-                            <div class="input-group">
-                                <input type="radio" id="dataset-rgb" name="dataset" value="RGB">
-                                <label for="dataset-rgb">RGB</label>
+                            <div class="input-group dataset-dimension-group">
+                                <label for="dim1-hops">Hops:</label>
+                                <select id="dim1-hops" name="dim1-hops">
+                                    <option value="">-- Select Hops --</option>
+                                </select>
                             </div>
-                            <div class="input-group">
-                                <input type="radio" id="dataset-multihop" name="dataset" value="Multihop">
-                                <label for="dataset-multihop">Multihop</label>
+                            <div class="input-group dataset-dimension-group">
+                                <label for="dim2-task">Task:</label>
+                                <select id="dim2-task" name="dim2-task" disabled>
+                                    <option value="">-- Select Task --</option>
+                                </select>
                             </div>
-                            <div class="input-group">
-                                <input type="radio" id="dataset-ragas" name="dataset" value="RAGAS">
-                                <label for="dataset-ragas">RAGAS</label>
+                            <div class="input-group dataset-dimension-group">
+                                <label for="dim3-scale">Scale:</label>
+                                <select id="dim3-scale" name="dim3-scale" disabled>
+                                    <option value="">-- Select Scale --</option>
+                                </select>
                             </div>
-                            <div class="input-group">
-                                <input type="radio" id="dataset-rageval" name="dataset" value="RAGEval">
-                                <label for="dataset-rageval">RAGEval</label>
-                            </div>
-                            <div class="input-group">
-                                <input type="radio" id="dataset-crud-rag" name="dataset" value="CRUD-RAG">
-                                <label for="dataset-crud-rag">CRUD-RAG</label>
-                            </div>
-                            <div class="input-group">
-                                <input type="radio" id="dataset-recall" name="dataset" value="RECALL">
-                                <label for="dataset-recall">RECALL</label>
+                            <div id="selected-datasets-display" class="selected-datasets-container">
+                                <h4>Selected Datasets:</h4>
+                                <ul id="selected-datasets-list">
+                                    <li>Select dimensions above...</li>
+                                </ul>
                             </div>
                         </div>
                     </div>
@@ -85,13 +79,13 @@
                             <i class="material-icons">expand_more</i>
                         </div>
                         <div class="sidebar-content-inner">
-                            <div class="input-group">
+                             <div class="input-group">
                                 <label for="top-k">TOP-K:</label>
                                 <input type="number" id="top-k" name="top-k" value="5">
                             </div>
                             <div class="input-group">
                                 <label for="similarity-threshold">Threshold:</label>
-                                <input type="number" id="similarity-threshold" name="similarity-threshold" value="0.8">
+                                <input type="number" id="similarity-threshold" name="similarity-threshold" value="0.8" step="0.01">
                             </div>
                             <div class="input-group">
                                 <label for="chunk-size">ChunkSize:</label>
@@ -100,12 +94,12 @@
                         </div>
                     </div>
                     <div class="sidebar-section-inner">
-                        <div class="sidebar-header-inner" onclick="toggleSidebarSection(this)">
+                         <div class="sidebar-header-inner" onclick="toggleSidebarSection(this)">
                             <h3>GraphRAG</h3>
                             <i class="material-icons">expand_more</i>
                         </div>
                         <div class="sidebar-content-inner">
-                            <div class="input-group">
+                           <div class="input-group">
                                 <label for="k-hop">K-HOP:</label>
                                 <select id="k-hop" name="k-hop">
                                     <option value="1">1</option>
@@ -151,84 +145,53 @@
                     </div>
                 </div>
             </div>
-            <button id = "readButton" style="height: 50px;">Run</button>
+            <button id="applySettingsButton" class="run-button" style="height: 50px;" disabled>Apply Settings</button>
         </aside>
 
-        <!-- 主要内容区域 -->
         <main class="main-content">
-            <!-- 第一部分：Answer -->
             <section class="answer-section section-box">
-                <div class="answer-box">
-                    <div class="section-title answer-title">
-                        <span>Answer</span>
-                        <div class="title-icons">
-                            <img class="answer-icon" src="../lib/qa.png" alt="Answer Icon">
-                        </div>
+                <div class="section-title answer-title">
+                    <span>Answer</span>
+                    <div class="rag-selector">
+                        <label for="rag-select">Mode:</label>
+                        <select id="rag-select">
+                            <option value="vector">Vector</option>
+                            <option value="graph">Graph</option>
+                            <option value="hybrid">Hybrid</option>
+                        </select>
                     </div>
-                    <div class="content-wrapper">
-                        <div class="answer-section">
-                            <div class="rag-selector">
-                                <label for="rag-select">Mode:</label>
-                                <select id="rag-select">
-                                    <option value="vector">Vector</option>
-                                    <option value="graph">Graph</option>
-                                    <option value="hybrid">Hybrid</option>
-                                </select>
-                            </div>
-                            <div class="answer-content">
-                                <!-- Vector Answer -->
-                                <div class="box" id="vector-answer">
-                                    <div class="content">
-                                        <div id="vector-answer-content" class="answer-text">
-                                            <!-- 后端返回的Vector RAG答案 -->
-                                        </div>
-                                    </div>
-                                </div>
-                                <!-- Graph Answer -->
-                                <div class="box" id="graph-answer" style="display: none;">
-                                    <div class="content">
-                                        <div id="graph-answer-content" class="answer-text">
-                                            <!-- 后端返回的Graph RAG答案 -->
-                                        </div>
-                                    </div>
-                                </div>
-                                <!-- Hybrid Answer -->
-                                <div class="box" id="hybrid-answer" style="display: none;">
-                                    <div class="content">
-                                        <div id="hybrid-answer-content" class="answer-text">
-                                            <!-- 后端返回的Hybrid RAG答案 -->
-                                        </div>
-                                    </div>
-                                </div>
+                    <div class="title-icons">
+                        <img class="answer-icon" src="../lib/qa.png" alt="Answer Icon">
+                    </div>
+                </div>
+                <div class="content-wrapper">
+                    <div class="answer-content">
+                        <div class="box" id="current-answer-display">
+                            <div class="content" id="current-answer-content">
                             </div>
                         </div>
                     </div>
                 </div>
             </section>
-  
-            <!-- 第二部分：Suggestion -->
+
             <section class="suggestion-section section-box">
-                <div class="advice-box">
+                 <div class="advice-box">
                     <div class="section-title suggestion-title">
                         <span>Suggestions</span>
-                        <button id = "get_suggestions">Get Suggestions</button>
                         <div class="title-icons">
                             <img src="../lib/lantern.jpg" alt="Suggestion Icon" class="suggestion-icon">
                         </div>
-
                     </div>
-                    <!-- 建议 -->
                     <div class="advice-section">
                         <div class="box" id="advice-box">
                             <div class="content" id="advice-content">
-                                <!-- 后端返回的建议内容 -->
+                                Suggestions will load after applying settings.
                             </div>
                         </div>
                     </div>
                 </div>
             </section>
 
-            <!-- 第三部分：Retrieval Result -->
             <section class="retrieval-result section-box">
                 <div class="section-title">
                   <span>Retrieval Result</span>
@@ -237,135 +200,44 @@
                   </div>
                 </div>
                 <div class="retrieval-content">
-                    <!-- Vector Result -->
                     <div class="box" id="vector-result">
-                        <div class="content">
-                            <h3 class="box-title">Vector Result</h3>
-                            <div id="vector-content">
-                            </div>
+                        <h3 class="retrieval-box-title">Vector Results</h3>
+                        <div id="vector-content">
+                            Select an item from History to view details.
                         </div>
                     </div>
-                    <!-- Graph Result -->
-                    <div class="box" id="cy">
-                        
-
+                    <div class="box" id="cy-container">
+                        <h3 class="retrieval-box-title">Knowledge Graph</h3>
+                        <div id="cy"></div>
                     </div>
                 </div>
             </section>
 
-            
-
-            <!-- 第四部分：History -->
             <section class="history-section section-box">
                 <div class="section-title" id="history-title">
-                    <span id="history-title-text">History</span>
-                    <img src="../lib/history.png" alt="History Icon" class="history-icon">
+                    <span>History</span>
+                    <div class="history-session-controls">
+                         <select id="history-session-select">
+                         </select>
+                         <button id="new-history-session-button" title="New History Session">+</button>
+                         <div id="new-session-input-container" style="display: none; margin-left: 5px; align-items: center;">
+                            <input type="text" id="new-session-name-input" placeholder="Enter name & press Enter" size="15">
+                            <button id="cancel-new-session-button" title="Cancel" class="cancel-button" style="margin-left: 3px; padding: 1px 4px; font-size: 0.8em; line-height: 1;">✕</button>
+                         </div>
+                    </div>
+                     <div class="title-icons">
+                        <img src="../lib/history.png" alt="History Icon" class="history-icon">
+                     </div>
                 </div>
-                <div class="history-content" id="scroll-container" style="background-color: #D8B7DD; overflow-y: auto; padding: 10px; border: 1px solid #ccc;">
+                <div class="history-content" id="scroll-container">
                     <div id="question-list">
-                        <!-- 问题将通过 JavaScript 动态添加 -->
+                        Select or create a history session.
                     </div>
                     <div class="more-info">
                         <span class="more-info-text">if you want to know more detailed metric, please click</span>
                         <i class="material-icons more-button">arrow_forward</i>
-                        <a href="{{ url_for('analysis') }}" id="More_button" style="display: inline-block; margin-left: 5px; text-decoration: none;">More</a>
+                        <a href="analysis.html" id="moreAnalysisLink" class="more-link" style="margin-left: 5px;">More</a>
                     </div>
-                </div>
-            </section>
-            
-            <!-- 第五部分：Analysis -->
-            <section class="analysis-section section-box" style="display: none;">
-                <button class="back-button">返回</button>  <!-- 添加返回按钮 -->
-                <div class="analysis-title-row">
-                    <div class="section-title">Metric Area</div>
-                </div>
-                <div class="analysis-content">
-                    <div class="gauges-container">
-                        <div class="section-title analysis-sub-title">Accuracy</div>
-                        <!-- 仪表盘 -->
-                        <div class="gauge-wrapper">
-                            <div class="gauge-container">
-                                <div class="gauge-title">VectorRAG</div>
-                                <canvas id="gauge1"></canvas>
-                                <div class="percentage" id="percentage1"></div>
-                            </div>
-                        </div>
-                        <div class="gauge-wrapper">
-                            <div class="gauge-container">
-                                <div class="gauge-title">GraphRAG</div>
-                                <canvas id="gauge2"></canvas>
-                                <div class="percentage" id="percentage2"></div>
-                            </div>
-                        </div>
-                        <div class="gauge-wrapper">
-                            <div class="gauge-container">
-                                <div class="gauge-title">HybridRAG</div>
-                                <canvas id="gauge3"></canvas>
-                                <div class="percentage" id="percentage3"></div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="all-charts-container" style="display: none;">
-                        <!-- 仪表盘 -->
-                        <div class="panel-container">
-                            <div class="section-title analysis-sub-title">Accuracy</div>
-                            <div class="gauge-wrapper">
-                                <div class="gauge-container">
-                                    <div class="gauge-title">VectorRAG</div>
-                                    <canvas id="gauge1-big"></canvas>
-                                    <div class="percentage" id="percentage1-big"></div>
-                                </div>
-                            </div>
-                            <div class="gauge-wrapper">
-                                <div class="gauge-container">
-                                    <div class="gauge-title">GraphRAG</div>
-                                    <canvas id="gauge2-big"></canvas>
-                                    <div class="percentage" id="percentage2-big"></div>
-                                </div>
-                            </div>
-                            <div class="gauge-wrapper">
-                                <div class="gauge-container">
-                                    <div class="gauge-title">HybridRAG</div>
-                                    <canvas id="gauge3-big"></canvas>
-                                    <div class="percentage" id="percentage3-big"></div>
-                                </div>
-                            </div>
-                        </div>
-                        <!-- 饼图部分 -->
-                        <div class="chart-container">
-                            <div class="section-title analysis-sub-title">Error Statistic</div>
-                            <div class="chart-box">
-                                <div class="chart-title">VectorRAG</div>
-                                <canvas id="pieChart1"></canvas>
-                            </div>
-                            <div class="chart-box">
-                                <div class="chart-title">GraphRAG</div>
-                                <canvas id="pieChart2"></canvas>
-                            </div>
-                            <div class="chart-box">
-                                <div class="chart-title">HybridRAG</div>
-                                <canvas id="pieChart3"></canvas>
-                            </div>
-                        </div>
-
-                        <!-- 雷达图部分 -->
-                        <div class="radar-container">
-                            <div class="section-title analysis-sub-title">Evaluation Metric</div>
-                            <div class="radar-box">
-                                <div class="radar-title">VectorRAG</div>
-                                <canvas id="radarChart1"></canvas>
-                            </div>
-                            <div class="radar-box">
-                                <div class="radar-title">GraphRAG</div>
-                                <canvas id="radarChart2"></canvas>
-                            </div>
-                            <div class="radar-box">
-                                <div class="radar-title">HybridRAG</div>
-                                <canvas id="radarChart3"></canvas>
-                            </div>
-                        </div>
-                    </div>
-                    
                 </div>
             </section>
         </main>

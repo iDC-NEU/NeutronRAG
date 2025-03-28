@@ -1,971 +1,525 @@
+// --- 全局配置 ---
+// !! 切换模式: true = 使用后端 API 获取/保存会话历史, false = 使用本地对象模拟
+const USE_BACKEND_HISTORY = false;
+
+// --- 常量与全局变量 ---
 const sendButton = document.getElementById("send-button");
+const applySettingsButton = document.getElementById("applySettingsButton");
+const userInput = document.getElementById("user-input");
+const ragSelect = document.getElementById("rag-select");
+const currentAnswerContent = document.getElementById('current-answer-content');
+const adviceContent = document.getElementById("advice-content");
+const vectorContent = document.getElementById("vector-content");
+const cyContainer = document.getElementById('cy');
+const questionList = document.getElementById("question-list");
+const modelSelect = document.getElementById("model-select");
+const apiKeyInput = document.getElementById("api-key-input");
+const dim1Select = document.getElementById('dim1-hops');
+const dim2Select = document.getElementById('dim2-task');
+const dim3Select = document.getElementById('dim3-scale');
+const selectedDatasetsList = document.getElementById('selected-datasets-list');
+const historySessionSelect = document.getElementById('history-session-select');
+const newHistorySessionButton = document.getElementById('new-history-session-button');
+const newSessionInputContainer = document.getElementById('new-session-input-container');
+const newSessionNameInput = document.getElementById('new-session-name-input');
+const cancelNewSessionButton = document.getElementById('cancel-new-session-button');
+
 let isGenerating = false;
 let abortController = new AbortController();
+let currentCytoscapeInstance = null;
+let currentAnswers = { query: "", vector: "", graph: "", hybrid: "" };
+const placeholderText = `<div class="placeholder-text">请选择 RAG 模式，输入内容或从历史记录中选择，然后点击应用设置。</div>`;
+let selectedDatasetName = null;
+let isAddingNewSession = false;
 
-sendButton.addEventListener("click", async () => {
-  if (!isGenerating) {
-    const userInput = document.getElementById("user-input").value;
-    sendButton.textContent = "加载中...";
-    sendButton.disabled = true;
-    isGenerating = true;
-    abortController = new AbortController();
-    let signal = abortController.signal;
+// --- 后端模式状态 (仅当 USE_BACKEND_HISTORY = true 时使用) ---
+let sessionsList = [];
+let currentSessionId = null;
 
-    try {
-      const response = await fetch("/generate", {
-        method: "POST",
-        body: JSON.stringify({ input: userInput }),
-        signal: signal,
-      });
+// --- 本地模拟数据 (仅当 USE_BACKEND_HISTORY = false 时使用) ---
+let historySessions = {
+    "Default Session": [
+        { id: 'mock1', query: 'Sample Query 1 (Mock)', answer: 'Vector answer for Sample 1', type: 'GREEN', vectorAnswer: 'Vector answer for Sample 1', graphAnswer: 'Graph answer for Sample 1', hybridAnswer: 'Hybrid answer for Sample 1', timestamp: new Date(Date.now() - 100000).toISOString() },
+        { id: 'mock2', query: 'Sample Query 2 (Mock Error)', answer: 'Vector error', type: 'RED', vectorAnswer: 'Vector error', graphAnswer: 'Graph error', hybridAnswer: 'Hybrid error', timestamp: new Date(Date.now() - 50000).toISOString() }
+    ],
+    "Another Session": []
+};
+let currentHistorySessionName = "Default Session";
 
-      if (response.ok) {
-        const data = await response.json();
-        updateUIWithResponse(data);
-      } else {
-        throw new Error("Network response was not ok.");
-      }
-    } catch (error) {
-      if (error.name === "AbortError") {
-        console.log("Fetch aborted");
-      } else {
-        console.error("Fetch error:", error);
-      }
-    } finally {
-      sendButton.textContent = "发送";
-      sendButton.disabled = false;
-      isGenerating = false;
+// --- 数据集层级结构 ---
+const datasetHierarchy = {
+    "Single-hop": {
+        "Specific": {
+            "Single-object": ["RGB[3]", "RAGAS[9]", "RECALL[31]", "CRUD-RAG [33]", "ARES[41]", "RAGEval[60]"],
+            "Multi-object": []
+        },
+        "Ambiguous": {
+            "Single-object": ["RAGAS[9]", "RAGEval[60]"],
+            "Multi-object": []
+        }
+    },
+    "Multi-hop": {
+        "Specific": {
+            "Single-object": ["ARES[41]"],
+            "Multi-object": ["RGB[3]", "Multi-hop[46]", "RAGEval[60]"]
+        },
+        "Ambiguous": {
+            "Single-object": ["CRUD-RAG [33]"],
+            "Multi-object": ["Multi-hop[46]", "CRUD-RAG [33]"]
+        }
     }
-  } else {
-    abortController.abort();
-    isGenerating = false;
-    sendButton.textContent = "发送";
-    sendButton.disabled = false;
-  }
-});
+};
 
-// 模拟后端数据更新UI
-function updateUIWithResponse(data) {
-  // 更新 Retrieval Result 部分
-  document.getElementById("vector-content").innerHTML = "";
-  if (data.vectorResult && data.vectorResult.length > 0) {
-      document.getElementById("vector-placeholder").style.display = "none";
-      data.vectorResult.forEach((item, index) => {
-          const vectorResultItem = document.createElement("div");
-          vectorResultItem.classList.add("retrieval-result-item");
-          vectorResultItem.innerHTML = `
-              <p><b>Chunk ${index + 1}:</b> ${item}</p>
-          `;
-          document.getElementById("vector-content").appendChild(vectorResultItem);
-      });
-  } else {
-      document.getElementById("vector-placeholder").style.display = "flex";
-  }
+// --- UI 辅助函数 ---
 
-  document.getElementById("graph-content").innerHTML = "";
-  if (data.graphResult && data.graphResult.length > 0) {
-      document.getElementById("graph-placeholder").style.display = "none";
-      data.graphResult.forEach((item, index) => {
-          const graphResultItem = document.createElement("div");
-          graphResultItem.classList.add("retrieval-result-item");
-          graphResultItem.innerHTML = `
-              <p><b>Chunk ${index + 1}:</b> ${item}</p>
-          `;
-          document.getElementById("graph-content").appendChild(graphResultItem);
-      });
-  } else {
-      document.getElementById("graph-placeholder").style.display = "flex";
-  }
-  
-
-  // 更新 Answer 部分
- document.getElementById("vector-answer-content").innerHTML = `
-        <div class="question-container">
-            <img src="./lib/employee.png" alt="Question Icon" class="question-icon">
-            <p class="question-text">When was Pixel Fold announced?</p>
-        </div>
-        <div class="answer-text">
-            <img src="./lib/llama.png" alt="Answer Icon" class="answer-icon-llama">
-            According to the provided context information, Pixel Fold was announced on September 12, 2022.
-        </div>
-  `;
-  document.getElementById("graph-answer-content").innerText = data.graphAnswer; // 这里需要根据实际数据更新
-  document.getElementById("hybrid-answer-content").innerText = data.hybridAnswer; // 这里需要根据实际数据更新
-
-  // 更新 Suggestions 部分
-  document.getElementById("advice-content").innerHTML = `
-    <ul class="advice-list">
-        <li class="advice-item">
-            <img src="./lib/advice.png" alt="Advice Icon" class="advice-icon">
-            <span class="advice-text">Most of the errors are caused by lack useful information.</span>
-        </li>
-        <li class="advice-item">
-            <img src="./lib/advice.png" alt="Advice Icon" class="advice-icon">
-            <span class="advice-text"><b>VectorRAG:</b></span>
-        </li>
-        <li class="advice-item">
-            <img src="./lib/advice.png" alt="Advice Icon" class="advice-icon">
-            <span class="advice-text">Try to increase Chunksize</span>
-        </li>
-        <li class="advice-item">
-            <img src="./lib/advice.png" alt="Advice Icon" class="advice-icon">
-            <span class="advice-text">Increase the value of TOP-K</span>
-        </li>
-        <li class="advice-item">
-            <img src="./lib/advice.png" alt="Advice Icon" class="advice-icon">
-            <span class="advice-text"><b>GraphRAG:</b></span>
-        </li>
-        <li class="advice-item">
-            <img src="./lib/advice.png" alt="Advice Icon" class="advice-icon">
-            <span class="advice-text">Increase K-HOP value</span>
-        </li>
-    </ul>
-  `;
-
-  // 更新 Analysis 部分
-  updateGauges(data.gaugeData);
-  initializeCharts(data.chartData);
-}
-
-// 控制左侧栏各个部分折叠的函数
 function toggleSidebarSection(header) {
     const content = header.nextElementSibling;
+    const icon = header.querySelector('.material-icons');
     header.classList.toggle("collapsed");
-    if (content.style.display === "none") {
+    if (content.style.display === "none" || content.style.display === "") {
         content.style.display = "block";
+        if (icon) icon.textContent = 'expand_less';
     } else {
         content.style.display = "none";
+        if (icon) icon.textContent = 'expand_more';
     }
 }
 
-// History 部分的逻辑
-const questionList = document.getElementById("question-list");
-let currentDataset = null;
-
-// 模拟数据集数据
-const datasets = {
-  RGB: [
-    { id: 1, question: "What is the capital of France?", answer: "Paris", correct: true },
-    { id: 2, question: "What is the highest mountain in the world?", answer: "Mount Everest", correct: true },
-    { id: 3, question: "Who painted the Mona Lisa?", answer: "Michelangelo", correct: false },
-  ],
-  Multihop: [
-    { id: 4, question: "What is the smallest country in the world?", answer: "Vatican City", correct: true },
-    { id: 5, question: "What is the largest ocean in the world?", answer: "Atlantic Ocean", correct: false },
-    { id: 6, question: "Who wrote Hamlet?", answer: "William Shakespeare", correct: true }
-  ],
-    RAGAS: [
-        { id: 7, question: "What is the capital of Italy?", answer: "Rome", correct: true },
-        { id: 8, question: "What is the deepest lake in the world?", answer: "Lake Baikal", correct: true },
-        { id: 9, question: "Who painted the Last Supper?", answer: "Leonardo da Vinci", correct: true },
-    ],
-    RAGEval: [
-        { id: 10, question: "What is the longest river in the world?", answer: "Nile", correct: true },
-        { id: 11, question: "What is the largest desert in the world?", answer: "Sahara Desert", correct: false },
-        { id: 12, question: "Who wrote The Odyssey?", answer: "Homer", correct: true }
-    ],
-    "CRUD-RAG": [
-        { id: 13, question: "What is the capital of Canada?", answer: "Ottawa", correct: true },
-        { id: 14, question: "What is the highest waterfall in the world?", answer: "Angel Falls", correct: true },
-        { id: 15, question: "Who painted The Starry Night?", answer: "Vincent van Gogh", correct: true },
-    ],
-    RECALL: [
-        { id: 16, question: "What is the largest country in the world?", answer: "Russia", correct: true },
-        { id: 17, question: "What is the smallest continent in the world?", answer: "Australia", correct: true },
-        { id: 18, question: "Who wrote The Iliad?", answer: "Homer", correct: true }
-    ]
-};
-
-// 显示问题列表
-function displayQuestions(dataset) {
-  questionList.innerHTML = ""; // 清空问题列表
-  currentDataset = dataset;
-
-  if (dataset && datasets[dataset]) {
-    datasets[dataset].forEach(item => {
-      const questionItem = document.createElement("div");
-      questionItem.classList.add("question-item");
-      if (item.correct) {
-        questionItem.classList.add("correct");
-        questionItem.innerHTML = `
-          <img src="./lib/correct.png" alt="Correct Icon" class="question-icon">
-          <p>id: ${item.id},  query: ${item.question} Ground truth: ${item.answer}</p>
-        `;
-      } else {
-        questionItem.classList.add("wrong");
-        questionItem.innerHTML = `
-          <img src="./lib/wrong.png" alt="Wrong Icon" class="question-icon">
-          <p>id: ${item.id},  query: ${item.question} Ground truth: ${item.answer}</p>
-        `;
-      }
-      questionList.appendChild(questionItem);
-    });
-  } else {
-      // 如果没有选择数据集，则显示提示信息
-      questionList.innerHTML = "<p>Please select a dataset from the left sidebar.</p>";
-  }
-  updateHistoryTitle(dataset);
-  addMoreButtonEventListeners();
-}
-
-// 更新 History 标题
-function updateHistoryTitle(dataset = "") {
-    const historyTitle = document.getElementById("history-title-text");
-    historyTitle.textContent = `History: ${dataset}`;
-}
-
-// 为 More 按钮添加事件监听器
-document.addEventListener('DOMContentLoaded', () => {
-    const backButton = document.querySelector(".analysis-section .back-button");
-    const analysisSection = document.querySelector('.analysis-section');
-
-    if(backButton && analysisSection){
-        backButton.addEventListener("click", function() {
-            analysisSection.classList.remove("enlarged");
-            analysisSection.style.display = "none";
-        });
-    }
-  // 在 DOMContentLoaded 事件中调用 addMoreButtonEventListeners
-  addMoreButtonEventListeners();
-});
-
-// 为 More 按钮添加事件监听器
-function addMoreButtonEventListeners() {
-  const moreButton = document.querySelector(".more-info .material-icons");
-  const analysisSection = document.querySelector('.analysis-section');
-
-  if (analysisSection) {
-      moreButton.addEventListener("click", function(event) {
-          event.stopPropagation();
-
-          analysisSection.classList.toggle("enlarged");
-
-          if (analysisSection.classList.contains("enlarged")) {
-            analysisSection.style.display = "flex";
-          } else {
-            analysisSection.style.display = "none";
-          }
-      });
-  } else {
-      console.error("Error: .analysis-section element not found!");
-  }
-}
-
-// 创建仪表盘的函数
-function createGauge(elementId, percentage, textFiledId) {
-    const isBig = elementId.includes('-big');
-    var opts = {
-        angle: 0.15,
-        lineWidth: isBig? 0.33 : 0.22,
-        radiusScale: isBig ? 0.9 : 1,
-        pointer: {
-            length: isBig ? 0.5 : 0.6,
-            strokeWidth: isBig ? 0.025: 0.035,
-            color: '#000000'
-        },
-        limitMax: false,
-        limitMin: false,
-        colorStart: '#B068CF',
-        colorStop: '#8FC0DA',
-        strokeColor: '#E0E0E0',
-        generateGradient: true,
-        highDpiSupport: true,
-        staticZones: [
-            {strokeStyle: "#F03E3E", min: 0, max: 20},
-            {strokeStyle: "#FFDD00", min: 20, max: 50},
-            {strokeStyle: "#30B32D", min: 50, max: 80},
-            {strokeStyle: "#FFDD00", min: 80, max: 90},
-            {strokeStyle: "#F03E3E", min: 90, max: 100}
-        ],
-        staticLabels: {
-            font: isBig ? "16px sans-serif" : "10px sans-serif",
-            labels: isBig ? [0, 20, 50, 80, 100] : [0, 20, 50, 80, 100],
-            color: "#000000",
-            fractionDigits: 0
-        },
-        renderTicks: {
-            divisions: isBig ? 5 : 5,
-            divWidth: isBig ? 0.9 : 1.1,
-            divLength: isBig ? 0.6 : 0.7,
-            divColor: '#333333',
-            subDivisions: isBig ? 3 : 3,
-            subLength: isBig ? 0.3 : 0.5,
-            subWidth: isBig ? 0.4 : 0.6,
-            subColor: '#666666'
-        }
-    };
-
-    var target = document.getElementById(elementId);
-    var gauge = new Gauge(target).setOptions(opts);
-    gauge.maxValue = 100;
-    gauge.setMinValue(0);
-    gauge.animationSpeed = 32;
-    gauge.set(percentage);
-    gauge.setTextField(document.getElementById(textFiledId));
-    return gauge;
-}
-
-// 初始化所有图表
-function initializeCharts(data) {
-    if (!data) {
-        console.error("No chart data provided to initializeCharts");
-        return;
-    }
-    console.log("Chart Data:", data); // 打印数据
-    // 饼图
-    console.log("pieChart1 context:", document.getElementById('pieChart1').getContext('2d'));  // 打印上下文
-    createPieChart(document.getElementById('pieChart1').getContext('2d'), data.pieChart1 || [10, 20, 30, 40], ["None Result", "Lack Information", "Noisy", "Other"]);
-    createPieChart(document.getElementById('pieChart2').getContext('2d'), data.pieChart2 || [15, 25, 35, 25], ["None Result", "Lack Information", "Noisy", "Other"]);
-    createPieChart(document.getElementById('pieChart3').getContext('2d'), data.pieChart3 || [5, 50, 25, 20], ["None Result", "Lack Information", "Noisy", "Other"]);
-
-    // 雷达图
-    createRadarChart(document.getElementById('radarChart1').getContext('2d'), ['Accuracy', 'Relevance', 'Recall', 'Faithfulness'], data.radarChart1 || [0.6, 0.7, 0.8, 0.5]);
-    createRadarChart(document.getElementById('radarChart2').getContext('2d'), ['Accuracy', 'Relevance', 'Recall', 'Faithfulness'], data.radarChart2 || [0.5, 0.6, 0.7, 0.6]);
-    createRadarChart(document.getElementById('radarChart3').getContext('2d'), ['Accuracy', 'Relevance', 'Recall', 'Faithfulness'], data.radarChart3 || [0.7, 0.8, 0.6, 0.5]);
-    const pieChart1 = document.getElementById('pieChart1');
-    pieChart1.width = pieChart1.width;
-
-    const radarChart1 = document.getElementById('radarChart1');
-    radarChart1.width = radarChart1.width;
-  }
-  window.onload = function() {
-    // 从后端获取数据
-    fetch('/api/chart-data')
-        .then(response => response.json())
-        .then(data => {
-            // 初始化图表
-            initializeCharts(data);
-        })
-        .catch(error => {
-            console.error('Error fetching chart data:', error);
-        });
-};
-// 饼图创建函数
-function createPieChart(ctx, data, labels) {
-    return new Chart(ctx, {
-        type: 'pie',
-        data: {
-            datasets: [{
-                data: data,
-                backgroundColor: ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0'],
-                label: 'Dataset 1'
-            }],
-            labels: labels
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                datalabels: {
-                    formatter: function(value, context) {
-                        return value + '%'; // Show percentage on each section
-                    },
-                    color: '#fff',
-                    font: {
-                        weight: 'bold',
-                        size: 16
-                    },
-                    anchor: 'center', // 文字居中显示
-                    align: 'center'   // 文字居中显示
-                }
-            },
-            legend: {
-                display: true, // 显示图例
-                position: 'bottom', // 图例位置
-            },
-        },
-        plugins: [ChartDataLabels]
-        
-    });
-}
-
-// 雷达图创建函数
-function createRadarChart(ctx, labels, data) {
-    return new Chart(ctx, {
-        type: 'radar',
-        data: {
-            labels: labels,
-            datasets: [{
-                label: '评估指标',
-                data: data,
-                backgroundColor: 'rgba(34, 202, 236, 0.2)',
-                borderColor: 'rgba(34, 202, 236, 1)',
-                borderWidth: 2
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: {
-                r: {
-                    beginAtZero: true,
-                    max: 1,
-                    min: 0,
-                    ticks: {
-                        stepSize: 0.2
-                    }
-                }
-            }
-        }
-    });
-}
-
-// RAG 模式切换逻辑
-const ragSelect = document.getElementById("rag-select");
-const vectorAnswerBox = document.getElementById("vector-answer");
-const graphAnswerBox = document.getElementById("graph-answer");
-const hybridAnswerBox = document.getElementById("hybrid-answer");
-
-ragSelect.addEventListener("change", () => {
-    const selectedRag = ragSelect.value;
-
-    // 隐藏所有 RAG 答案
-    vectorAnswerBox.style.display = "none";
-    graphAnswerBox.style.display = "none";
-    hybridAnswerBox.style.display = "none";
-
-    // 显示选中的 RAG 答案
-    if (selectedRag === "vector") {
-        vectorAnswerBox.style.display = "block";
-    } else if (selectedRag === "graph") {
-        graphAnswerBox.style.display = "block";
-    } else if (selectedRag === "hybrid") {
-        hybridAnswerBox.style.display = "block";
-    }
-});
-
-// 页面加载时, 将dataset的内容发送给后端, 保持history更新
-document.addEventListener('DOMContentLoaded', () => {
-  // 获取所有 dataset 选项的单选按钮
-  const datasetRadios = document.querySelectorAll('input[name="dataset"]');
-
-  // 默认不选中数据集
-  // 为每个 dataset 单选按钮添加事件监听器
-  datasetRadios.forEach(radio => {
-      radio.addEventListener('change', () => {
-          if (radio.checked) {
-              const selectedDataset = radio.value;
-              console.log(`Dataset selected: ${selectedDataset}`);
-              // 在这里发送请求到后端，更新 history 部分
-              displayQuestions(selectedDataset);
-          }
-      });
-  });
-
-  // 模型选择和 API-KEY 联动
-  const modelSelect = document.getElementById("model-select");
-  const apiKeyInput = document.getElementById("api-key-input");
-
-  const modelApiKeys = {
-      ModelA: "API-KEY-A",
-      ModelB: "API-KEY-B",
-      ModelC: "API-KEY-C",
-  };
-
-  // 初始设置 API-KEY
-  apiKeyInput.value = modelApiKeys[modelSelect.value];
-
-  modelSelect.addEventListener("change", () => {
-      apiKeyInput.value = modelApiKeys[modelSelect.value];
-  });
-
-  // 在 DOMContentLoaded 事件中调用 addMoreButtonEventListeners
-  addMoreButtonEventListeners();
-});
-
-
-document.getElementById("readButton").addEventListener("click", function() {
-    const model = document.getElementById("model-select").value;
-    const apiKey = document.getElementById("api-key-input").value;
-    
-    // 获取数据集
-    const dataset = document.querySelector('input[name="dataset"]:checked')?.value || "RGB";
-
-    // VectorRAG 参数
-    const topK = parseInt(document.getElementById("top-k").value);
-    const threshold = parseFloat(document.getElementById("similarity-threshold").value);
-    const chunkSize = parseInt(document.getElementById("chunk-size").value);
-
-    // GraphRAG 参数
-    const kHop = parseInt(document.getElementById("k-hop").value);
-    const maxKeywords = parseInt(document.getElementById("max-keywords").value);
-    const pruning = document.getElementById("pruning").value === "yes";
-
-    // HybridRAG 参数
-    const strategy = document.getElementById("strategy").value;
-    const vectorProportion = parseFloat(document.getElementById("vector-proportion").value);
-    const graphProportion = parseFloat(document.getElementById("graph-proportion").value);
-
-    const requestData = {
-        model_name: model,
-        dataset: dataset,
-        key: apiKey,
-        top_k: topK,
-        threshold: threshold,
-        chunksize: chunkSize,
-        k_hop: kHop,
-        max_keywords: maxKeywords,
-        pruning: pruning,
-        strategy: strategy,
-        vector_proportion: vectorProportion,
-        graph_proportion: graphProportion
-    };
-
-    console.log("发送配置:", requestData);
-
-
-        // 发送请求到后端
-        fetch("/load_model", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify(requestData)
-        })
-        .then(response => response.json())
-        .then(data => {
-            console.log("模型加载成功:", data);
-            alert("模型加载成功!");
-        })
-        .catch(error => {
-            console.error("模型加载失败:", error);
-            alert("模型加载失败，请检查控制台错误日志。");
-        });
-
-
-});
-
-
-// ### History显示question_list
-document.getElementById('readButton').addEventListener('click', function() {
-    fetch('/read-file', {
-        method: 'GET',
-        headers: {
-            'Content-Type': 'application/json'
-        }
-    })
-    .then(response => response.json())
-    .then(data => {
-        console.log(data);
-        const questionListDiv = document.getElementById('question-list');
-        questionListDiv.innerHTML = '';  // 清空之前的输出
-
-        if (data.content) {
-            const list = data.content;
-
-            // 使用 setTimeout 来模拟逐条添加
-            let index = 0;
-            const interval = setInterval(() => {
-                if (index < list.length) {
-                    const item = list[index];
-
-                    // 创建一个新的 div 来包裹内容
-                    const div = document.createElement('div');
-                    div.classList.add('question-item');  // 为每个 div 添加一个类名，方便样式设置
-                    div.id = item.id; // 将每个 div 设置为它的 ID，方便后端选择数据
-                    
-                    // 根据 item.type 为 div 设置背景色
-                    switch (item.type) {
-                        case 'GREEN':
-                            div.style.backgroundColor = '#d9f7be';  // 浅绿色
-                            break;
-                        case 'RED':
-                            div.style.backgroundColor = '#ffccc7';  // 浅红色
-                            break;
-                        case 'YELLOW':
-                            div.style.backgroundColor = '#fff2e8';  // 浅橙色
-                            break;
-                        default:
-                            div.style.backgroundColor = '#f0f0f0';  // 默认背景色
-                            break;
-                    }
-
-                    // 创建一个 li 元素，并将内容放入
-                    const li = document.createElement('li');
-                    li.textContent = JSON.stringify(item, null, 2); // 美化显示 JSON
-
-                    // 将 li 添加到 div 中
-                    div.appendChild(li);
-
-                    // 为 div 添加点击事件
-                    div.addEventListener('click', function() {
-                        const answerContentDiv = document.querySelector('.answer-content');
-                        const ragSelect = document.getElementById('rag-select');
-
-
-                        if (answerContentDiv) {
-                            fetchData(item.id,ragSelect)
-
-                            ragSelect.addEventListener('change', function() {
-                                const selectedOption = ragSelect.value; // 获取当前选中的 RAG 模式
-                                fetchData(item.id,selectedOption)
-                            });
-
-                            // 根据 div 的 ID，动态获取对应的 JSON 文件内容
-                            const itemId = div.id;
-
-                            // 请求第一个 JSON 文件（向量数据）
-                            fetch(`/get-vector/${itemId}`, {
-                                method: 'GET',
-                                headers: { 'Content-Type': 'application/json' }
-                            })
-                            .then(response => response.json())
-                            .then(vectorData => {
-                                const vectorContentDiv = document.getElementById('vector-content');
-                                vectorContentDiv.innerHTML = `<pre>${JSON.stringify(vectorData, null, 2)}</pre>`;
-                            })
-                            .catch(error => {
-                                console.error('Error fetching vector data:', error);
-                                alert('Error fetching vector data');
-                            });
-
-                            // 请求第二个 JSON 文件（图数据）
-                            fetch(`/get-graph/${itemId}`, {
-                                method: 'GET',
-                                headers: { 'Content-Type': 'application/json' }
-                            })
-                            .then(response => response.json())  // 解析 JSON 数据
-                            .then(graphData => {
-                                // 创建 Cytoscape 实例
-                                var cy = cytoscape({
-                                    container: document.getElementById('cy'),  // 渲染图形的容器
-                                    elements: [],  // 初始为空，我们稍后会填充
-                                    style: [
-                                        {
-                                            selector: 'node',
-                                            style: {
-                                                'background-color': 'data(color)',  // 使用节点的颜色
-                                                'label': 'data(label)',  // 显示节点的标签
-                                                'width': 50,  // 可选：设置节点的大小
-                                                'height': 50  // 可选：设置节点的大小
-                                            }
-                                        },
-                                        {
-                                            selector: 'edge',
-                                            style: {
-                                                'line-color': 'data(color)',  // 使用边的颜色
-                                                'target-arrow-color': 'data(color)',  // 设置箭头的颜色
-                                                'curve-style': 'bezier',  // 设置边的曲线样式
-                                                'target-arrow-shape': 'triangle',  // 设置箭头的形状
-                                                'label': 'data(label)',  // 显示边的标签
-                                                'width': 2  // 可选：设置边的宽度
-                                            }
-                                        },
-                                        // 为高亮节点和边定义样式
-                                        {
-                                            selector: '.highlighted-node',
-                                            style: {
-                                                'background-color': '#FF5733',  // 高亮节点的背景颜色
-                                                'border-color': '#FF5733',  // 高亮节点的边框颜色
-                                                'border-width': 3 , // 边框宽度
-                                                'width': 80,  // 可选：设置节点的大小
-                                                'height': 80  // 可选：设置节点的大小
-                                            }
-                                        },
-                                        {
-                                            selector: '.highlighted-edge',
-                                            style: {
-                                                'line-color': '#FF5733',  // 高亮边的颜色
-                                                'target-arrow-color': '#FF5733',  // 高亮边的箭头颜色
-                                                'width': 3  // 边宽度
-                                            }
-                                        }
-                                    ],
-                                    layout: {
-                                        name: 'cose',  // 布局类型
-                                        fit: true,  // 自动适应图形
-                                        animate: true,  // 启用动画
-                                        animationDuration: 1000,  // 动画持续时间
-                                        animationEasing: 'ease-in-out'  // 动画缓动函数
-                                    },
-                                    hideEdgesOnViewport: true,
-                                });
-                            
-                                // 根据 graphData 动态添加节点和边
-                                cy.add(graphData.nodes);  // 添加节点
-                                cy.add(graphData.edges);  // 添加边
-                            
-                                // 添加高亮节点和边
-                                graphData['highlighted-node'].forEach(node => {
-                                    const highlightedNode = cy.getElementById(node.data.id);
-                                    highlightedNode.addClass('highlighted-node');
-                                });
-                            
-                                graphData['highlighted-edge'].forEach(edge => {
-                                    const highlightedEdge = cy.getElementById(edge.data.id);
-                                    highlightedEdge.addClass('highlighted-edge');
-                                });
-                            
-                                // 重新布局
-                                cy.layout({ name: 'cose' }).run();  // 运行布局算法，使图形按合理的位置显示
-                            })
-                            .catch(error => {
-                                console.error('Error:', error);
-                            });
-                        }
-                    });
-
-                    // 将整个 div 添加到 questionListDiv
-                    questionListDiv.appendChild(div);
-
-                    // 让容器自动滚动到底部
-                    questionListDiv.scrollTop = questionListDiv.scrollHeight;
-
-                    index++;
-                } else {
-                    clearInterval(interval);  // 清除定时器，停止添加
-                }
-            }, 1000); // 每秒添加一个新的列表项
+function displaySelectedAnswer() {
+    const selectedMode = ragSelect.value;
+    const answerToShow = currentAnswers[selectedMode];
+    const queryToShow = currentAnswers.query;
+    if (currentAnswerContent) {
+        if (queryToShow || answerToShow) {
+            const modelIcon = '../lib/llama.png';
+            currentAnswerContent.innerHTML = `
+                 <div class="question-container" id="answer-query-display">
+                      <img src="../lib/employee.png" alt="Question Icon" class="question-icon">
+                      <p class="question-text">${queryToShow || "N/A"}</p>
+                 </div>
+                 <div class="answer-text" id="answer-text-display">
+                     <img src="${modelIcon}" alt="Model Icon" class="answer-icon-llama">
+                     <span>${answerToShow || '此模式下无可用答案。'}</span>
+                 </div>
+            `;
         } else {
-            alert('No content returned');
+            currentAnswerContent.innerHTML = placeholderText;
         }
-    })
-    .catch(error => {
-        console.error('Error:', error);
-        alert('Error reading file');
-    });
-});
+    } else {
+        console.error("#current-answer-content 元素未找到");
+    }
+}
 
-
-document.getElementById('get_suggestions').addEventListener('click', function() {
-    // 发送 GET 请求到 Flask 后端
-    fetch('/get_suggestions')
-        .then(response => response.json())
-        .then(data => {
-            // 获取到返回的数据后，将建议显示到 #advice-content
-            const adviceContent = document.getElementById('advice-content');
+async function fetchAndDisplaySuggestions() {
+    adviceContent.innerHTML = "正在加载建议...";
+    try {
+        // #backend-integration: 从后端 /get_suggestions 接口获取建议
+        const response = await fetch('/get_suggestions');
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`网络错误: ${response.status} ${errorText}`);
+        }
+        const data = await response.json();
+        console.log("建议数据:", data);
+        if (data.suggestionsHTML) {
+            adviceContent.innerHTML = data.suggestionsHTML;
+        } else if (data.advice) {
             adviceContent.innerHTML = `
-                <h3>Vector Errors:</h3>
+                <h3>向量 RAG 错误:</h3>
                 <ul>
-                    <li>Retrieve Error: ${data.vector_retrieve_error}</li>
-                    <li>Lose Error: ${data.vector_lose_error}</li>
-                    <li>Lose Correct: ${data.vector_lose_correct}</li>
+                    <li>检索错误: ${data.vector_retrieve_error ?? 'N/A'}</li>
+                    <li>丢失错误: ${data.vector_lose_error ?? 'N/A'}</li>
+                    <li>丢失正确: ${data.vector_lose_correct ?? 'N/A'}</li>
                 </ul>
-                <h3>Graph Errors:</h3>
+                <h3>图谱 RAG 错误:</h3>
                 <ul>
-                    <li>Retrieve Error: ${data.graph_retrieve_error}</li>
-                    <li>Lose Error: ${data.graph_lose_error}</li>
-                    <li>Lose Correct: ${data.graph_lose_correct}</li>
+                    <li>检索错误: ${data.graph_retrieve_error ?? 'N/A'}</li>
+                    <li>丢失错误: ${data.graph_lose_error ?? 'N/A'}</li>
+                    <li>丢失正确: ${data.graph_lose_correct ?? 'N/A'}</li>
                 </ul>
-                <h3>Advice:</h3>
+                <h3>建议:</h3>
                 <p>${data.advice}</p>
             `;
-        })
-        .catch(error => {
-            console.error('Error fetching suggestions:', error);
+        } else {
+            adviceContent.textContent = "收到的建议数据格式不正确。";
+            console.warn("未预期的建议数据格式", data);
+        }
+    } catch (error) {
+        console.error('获取建议时出错:', error);
+        adviceContent.textContent = `无法加载建议: ${error.message}`;
+    }
+}
+
+function populateSelect(selectElement, options) {
+    const currentVal = selectElement.value;
+    const defaultOptionText = `-- 请选择 ${selectElement.id.split('-')[1] || '选项'} --`;
+    selectElement.innerHTML = `<option value="">${defaultOptionText}</option>`;
+    options.forEach(option => {
+        const opt = document.createElement('option');
+        opt.value = option;
+        opt.textContent = option;
+        selectElement.appendChild(opt);
+    });
+    if (options.includes(currentVal)) {
+        selectElement.value = currentVal;
+    }
+}
+
+function clearSelect(selectElement, keepDisabled = true) {
+    const defaultOptionText = `-- 请选择 ${selectElement.id.split('-')[1] || '选项'} --`;
+    selectElement.innerHTML = `<option value="">${defaultOptionText}</option>`;
+    selectElement.disabled = keepDisabled;
+}
+
+// --- 数据集选择逻辑 ---
+
+function updateDatasetSelection() {
+    const dim1Value = dim1Select.value;
+    const dim2Value = dim2Select.value;
+    const dim3Value = dim3Select.value;
+    let datasets = [];
+    selectedDatasetName = null;
+    applySettingsButton.disabled = true;
+    selectedDatasetsList.innerHTML = '<li>请先选择以上维度...</li>';
+    if (!dim1Value) {
+        clearSelect(dim2Select);
+        clearSelect(dim3Select);
+        return;
+    }
+    try {
+        let level1 = datasetHierarchy[dim1Value];
+        if (!level1) { clearSelect(dim2Select); clearSelect(dim3Select); selectedDatasetsList.innerHTML = '<li>无效的 Hops 选择。</li>'; return; }
+        populateSelect(dim2Select, Object.keys(level1)); dim2Select.disabled = false;
+        if (!dim2Value) { clearSelect(dim3Select); selectedDatasetsList.innerHTML = '<li>请选择 Task...</li>'; return; }
+        let level2 = level1[dim2Value];
+        if (!level2) { clearSelect(dim3Select); selectedDatasetsList.innerHTML = '<li>无效的 Task 选择。</li>'; return; }
+        populateSelect(dim3Select, Object.keys(level2)); dim3Select.disabled = false;
+        if (!dim3Value) { selectedDatasetsList.innerHTML = '<li>请选择 Scale...</li>'; return; }
+        let level3 = level2[dim3Value];
+        if (level3 === undefined) { selectedDatasetsList.innerHTML = '<li>无效的 Scale 选择。</li>'; return; }
+        datasets = level3;
+    } catch (e) {
+        console.error("导航数据集层级时出错:", e);
+        datasets = []; selectedDatasetsList.innerHTML = '<li>选择出错。</li>'; return;
+    }
+    if (Array.isArray(datasets) && datasets.length > 0) {
+        selectedDatasetsList.innerHTML = datasets.map(ds => `<li class="dataset-option" data-dataset-name="${ds}">${ds}</li>`).join('');
+        selectedDatasetsList.querySelectorAll('.dataset-option').forEach(item => item.addEventListener('click', handleDatasetOptionClick));
+        selectedDatasetsList.insertAdjacentHTML('afterbegin', '<li>请点击选择一个数据集:</li>');
+    } else {
+        selectedDatasetsList.innerHTML = '<li>此维度组合下未找到数据集。</li>';
+    }
+}
+
+function handleDatasetOptionClick(event) {
+    const li = event.currentTarget;
+    const datasetName = li.dataset.datasetName;
+    const currentlySelected = selectedDatasetsList.querySelector('.selected-dataset');
+    if (currentlySelected) { currentlySelected.classList.remove('selected-dataset'); }
+    li.classList.add('selected-dataset');
+    selectedDatasetName = datasetName;
+    console.log("选择的数据集:", selectedDatasetName);
+    applySettingsButton.disabled = false;
+}
+
+// --- 历史会话管理 ---
+
+async function initializeHistory() {
+    if (USE_BACKEND_HISTORY) {
+        console.log("从后端初始化历史记录...");
+        await fetchSessionsAPI();
+        await populateSessionDropdown();
+        await displaySessionHistory();
+    } else {
+        console.log("从本地模拟数据初始化历史记录...");
+        populateSessionDropdown();
+        displaySessionHistory();
+    }
+}
+
+async function fetchSessionsAPI() {
+    // #backend-integration: GET /api/sessions
+    console.log("(API 模式) 正在获取会话列表...");
+    try {
+        // const response = await fetch('/api/sessions'); // 实际 Fetch
+        // 模拟返回
+        const response = { ok: true, json: async () => ([{id: 'backend-uuid-1', name: 'Backend Session 1'}, {id: 'backend-uuid-2', name: 'Backend Session 2'}]) };
+        if (!response.ok) throw new Error(`获取失败: ${response.status}`);
+        sessionsList = await response.json();
+        console.log("(API 模式) 会话列表已加载:", sessionsList);
+    } catch (error) {
+        console.error("(API 模式) 获取会话列表时出错:", error);
+        sessionsList = [];
+        historySessionSelect.innerHTML = '<option value="">加载会话出错</option>';
+    }
+}
+
+function populateSessionDropdown() {
+    historySessionSelect.innerHTML = '';
+    if (USE_BACKEND_HISTORY) {
+        console.log("(API 模式) 正在根据 API 数据填充下拉菜单");
+        if (sessionsList.length === 0) { historySessionSelect.innerHTML = '<option value="">无可用会话</option>'; return; }
+        sessionsList.forEach(session => {
+            const option = document.createElement('option');
+            option.value = session.id; option.textContent = session.name; historySessionSelect.appendChild(option);
         });
-});
-
-
-
-// document.getElementById('More_button').addEventListener('click', function() {
-//     // 获取选定的数据集
-//     const datasetRadios = document.querySelectorAll('input[name="dataset"]');
-//     let selectedDataset = null;
-//     for (const radio of datasetRadios) {
-//         if (radio.checked) {
-//             selectedDataset = radio.value;
-//             break;
-//         }
-//     }
-
-//     if (!selectedDataset) {
-//         alert("请先选择一个数据集。"); // 提示用户先选择数据集
-//         return; // 如果没有选择数据集，则不继续执行
-//     }
-
-//     // 发送数据集信息到后端进行分析
-//     fetch('/analysis_data', {  // 发送 POST 请求到新的 '/analysis' 路由
-//         method: 'POST',
-//         headers: {
-//             'Content-Type': 'application/json'
-//         },
-//         body: JSON.stringify({ dataset: selectedDataset }) // 将选定的数据集名称发送到后端
-//     })
-//     .then(response => response.json())
-//     .then(analysisData => {
-//         console.log("从后端获取的分析数据:", analysisData);
-//         // 使用后端返回的数据更新分析 UI
-//         updateAnalysisUI(analysisData);
-
-//         // 显示 analysis section
-//         const analysisSection = document.querySelector('.analysis-section');
-//         analysisSection.style.display = 'flex';
-//     })
-//     .catch(error => {
-//         console.error('获取分析数据时出错:', error);
-//         alert('获取分析数据失败。'); // 提示用户获取分析数据失败
-//     });
-// });
-
-//  新的函数：用于更新 analysis UI
-function updateAnalysisUI(data) {
-    // 更新仪表盘
-    createGauge('gauge1', data.vector_accuracy, 'blue'); // 假设后端返回的 accuracy 数据字段名为 vector_accuracy
-    createGauge('gauge2', data.graph_accuracy, 'green'); // 假设后端返回的 accuracy 数据字段名为 graph_accuracy
-    createGauge('gauge3', data.hybrid_accuracy, 'purple'); // 假设后端返回的 accuracy 数据字段名为 hybrid_accuracy
-
-    // 更新饼图 (假设你已经有 createPieChart 函数)
-    updatePieChart(pieChart1, data.vector_error_data); // 假设后端返回饼图数据字段名为 vector_error_data
-    updatePieChart(pieChart2, data.graph_error_data); // 假设后端返回饼图数据字段名为 graph_error_data
-    updatePieChart(pieChart3, data.hybrid_error_data); // 假设后端返回饼图数据字段名为 hybrid_error_data
-
-    // 更新雷达图 (假设你已经有 createRadarChart 函数)
-    updateRadarChart(radarChart1, data.radar_labels, data.vector_radar_data); // 假设后端返回雷达图数据字段名和标签
-    updateRadarChart(radarChart2, data.radar_labels, data.graph_radar_data);
-    updateRadarChart(radarChart3, data.radar_labels, data.hybrid_radar_data);
+        if (currentSessionId && sessionsList.some(s => s.id === currentSessionId)) { historySessionSelect.value = currentSessionId; }
+        else if (sessionsList.length > 0) { currentSessionId = sessionsList[0].id; historySessionSelect.value = currentSessionId; }
+        else { currentSessionId = null; }
+        console.log("(API 模式) 下拉菜单已填充，当前会话 ID:", currentSessionId);
+    } else {
+        console.log("(本地模式) 正在根据本地数据填充下拉菜单");
+        const sessionNames = Object.keys(historySessions);
+        if (sessionNames.length === 0) { historySessionSelect.innerHTML = '<option value="">无可用会话</option>'; return; }
+        sessionNames.forEach(name => {
+            const option = document.createElement('option');
+            option.value = name; option.textContent = name; historySessionSelect.appendChild(option);
+        });
+        if (!historySessions.hasOwnProperty(currentHistorySessionName) && sessionNames.length > 0) { currentHistorySessionName = sessionNames[0]; }
+        else if (sessionNames.length === 0) { currentHistorySessionName = null; }
+        if (currentHistorySessionName) { historySessionSelect.value = currentHistorySessionName; }
+         console.log("(本地模式) 下拉菜单已填充，当前会话:", currentHistorySessionName);
+    }
 }
 
-// 初始化图表变量，在 updateAnalysisUI 函数外部定义
-let pieChart1, pieChart2, pieChart3, radarChart1, radarChart2, radarChart3;
-
-document.addEventListener('DOMContentLoaded', () => {
-    // 初始化饼图
-    const pieChart1Ctx = document.getElementById('pieChart1').getContext('2d');
-    const pieChart2Ctx = document.getElementById('pieChart2').getContext('2d');
-    const pieChart3Ctx = document.getElementById('pieChart3').getContext('2d');
-    pieChart1 = createPieChart(pieChart1Ctx, [0, 0, 0, 0]); // 初始数据，可以设置为 0 或其他默认值
-    pieChart2 = createPieChart(pieChart2Ctx, [0, 0, 0, 0]);
-    pieChart3 = createPieChart(pieChart3Ctx, [0, 0, 0, 0]);
-
-    // 初始化雷达图
-    const radarChart1Ctx = document.getElementById('radarChart1').getContext('2d');
-    const radarChart2Ctx = document.getElementById('radarChart2').getContext('2d');
-    const radarChart3Ctx = document.getElementById('radarChart3').getContext('2d');
-    const radarLabels = ['Accuracy', 'Relevance', 'Recall', 'Faithfulness'];  // 定义雷达图的标签
-    radarChart1 = createRadarChart(radarChart1Ctx, radarLabels, [0, 0, 0, 0]); // 初始数据
-    radarChart2 = createRadarChart(radarChart2Ctx, radarLabels, [0, 0, 0, 0]);
-    radarChart3 = createRadarChart(radarChart3Ctx, radarLabels, [0, 0, 0, 0]);
-});
-
-// 更新饼图数据的函数
-function updatePieChart(chart, data) {
-    chart.data.datasets[0].data = data;
-    chart.update();
-}
-
-// 更新雷达图数据的函数
-function updateRadarChart(chart, labels, data) {
-    chart.data.labels = labels;
-    chart.data.datasets[0].data = data;
-    chart.update();
-}
-
-
-
-function createGauge(elementId, percentage, color) {
-    // 设置不同颜色的渐变色
-    let colorStart, colorStop;
-    switch (color) {
-        case 'blue':
-            colorStart = '#A6C8FF'; // Light blue
-            colorStop = '#1E4B8B';  // Dark blue
-            break;
-        case 'green':
-            colorStart = '#A6FFB3'; // Light green
-            colorStop = '#28B64D';  // Dark green
-            break;
-        case 'purple':
-            colorStart = '#D3A6FF'; // Light purple
-            colorStop = '#6A2E8C';  // Dark purple
-            break;
-        case 'yellow':
-            colorStart = '#FFFFA6'; // Light yellow
-            colorStop = '#FFD700';  // Dark yellow
-            break;
-        default:
-            colorStart = '#A6C8FF'; // Default to light blue
-            colorStop = '#1E4B8B';  // Default to dark blue
+async function displaySessionHistory() {
+    questionList.innerHTML = '<li class="no-history-item">正在加载历史记录...</li>';
+    let items = [];
+    if (USE_BACKEND_HISTORY) {
+        const sessionId = currentSessionId;
+        if (!sessionId) { questionList.innerHTML = '<li class="no-history-item">请选择一个会话。</li>'; return; }
+        console.log(`(API 模式) 正在为会话获取历史记录: ${sessionId}`);
+        // #backend-integration: GET /api/sessions/${sessionId}/history
+        try {
+             // const response = await fetch(`/api/sessions/${sessionId}/history`); // 实际 Fetch
+             // 模拟返回
+             const mockBackendHistory = [ {id: `item-be-1-${sessionId}`, query: `Backend Query 1 for ${sessionId}`, answer: "Backend Answer 1", type:"GREEN", timestamp: new Date().toISOString()} ];
+             const response = { ok: true, json: async () => mockBackendHistory };
+             if (!response.ok) throw new Error(`获取失败: ${response.status}`);
+             items = await response.json();
+             console.log(`(API 模式) 获取到 ${items.length} 条历史记录。`);
+        } catch (error) {
+             console.error(`(API 模式) 获取会话 ${sessionId} 的历史记录时出错:`, error);
+             questionList.innerHTML = `<li class="no-history-item">加载历史记录出错: ${error.message}</li>`; return;
+        }
+    } else {
+        const sessionName = currentHistorySessionName;
+        if (!sessionName || !historySessions[sessionName]) { questionList.innerHTML = '<li class="no-history-item">请选择一个有效的会话。</li>'; return; }
+        console.log(`(本地模式) 正在显示本地会话的历史记录: ${sessionName}`);
+        items = (historySessions[sessionName] || []).slice().sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+        console.log(`(本地模式) 找到 ${items.length} 条历史记录。`);
     }
 
-    var opts = {
-        angle: 0.15, // The span of the gauge arc (this is a half-circle)
-        lineWidth: 0.4, // The line thickness
-        radiusScale: 1, // Relative radius
-        pointer: {
-            length: 0, // No pointer, because you just want an arc
-            strokeWidth: 0, // No pointer stroke
-            color: '#000000' // Pointer color, but it's not used
-        },
-        limitMax: false,     // Max value
-        limitMin: false,     // Min value
-        colorStart: colorStart,   // Dynamic start color
-        colorStop: colorStop,     // Dynamic end color
-        strokeColor: '#E0E0E0',  // Border color (grey color for the remaining part)
-        generateGradient: true,  // Enable gradient
-        highDpiSupport: true,     // High resolution support
-        staticZones: [
-            {strokeStyle: colorStart, min: 0, max: percentage},  // Gradual color based on percentage
-            {strokeStyle: '#E0E0E0', min: percentage, max: 100}    // Grey color for the remaining part
-        ],
-        staticLabels: {
-            font: "12px sans-serif",  // Specifies font
-            labels: [0, 50, 100],  // Print labels at these values
-            color: "#000000",  // Label text color
-            fractionDigits: 0  // Numerical precision. 0=round off
-        },
-        renderTicks: {
-            divisions: 5, // Major divisions
-            divWidth: 1.1,
-            divLength: 0.7,
-            divColor: '#333333',
-            subDivisions: 3, // Minor ticks
-            subLength: 0.5,
-            subWidth: 0.6,
-            subColor: '#666666'
-        }
+    questionList.innerHTML = '';
+    if (items.length === 0) { questionList.innerHTML = '<li class="no-history-item">此会话尚无历史记录。</li>'; return; }
+    items.forEach(item => {
+        const div = document.createElement('div'); div.classList.add('question-item'); div.id = `history-${item.id}`; div.dataset.itemId = item.id;
+        let backgroundColor = '#f0f0f0'; switch (item.type?.toUpperCase()) { case 'GREEN': backgroundColor = '#d9f7be'; break; case 'RED': backgroundColor = '#ffccc7'; break; case 'YELLOW': backgroundColor = '#fff2e8'; break; } div.style.backgroundColor = backgroundColor;
+        const answerSnippet = item.answer ? item.answer.substring(0, 30) + '...' : '';
+        div.innerHTML = `<p>ID: ${item.id}</p><p>Query: ${item.query || 'N/A'}</p>${answerSnippet ? `<p>Ans: ${answerSnippet}</p>` : ''}`;
+        div.addEventListener('click', handleHistoryItemClick); questionList.appendChild(div);
+    });
+}
+
+async function handleConfirmNewSession() {
+    const name = newSessionNameInput.value.trim();
+    if (name === "") { console.warn("会话名称不能为空。"); newSessionNameInput.focus(); return; }
+    hideNewSessionInput();
+    if (USE_BACKEND_HISTORY) {
+        console.log(`(API 模式) 尝试通过 API 创建新会话: ${name}`);
+        // #backend-integration: POST /api/sessions
+         try {
+             // const response = await fetch('/api/sessions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: name }) }); // 实际 Fetch
+             // 模拟成功
+             const newSession = { id: `backend-uuid-${Date.now()}`, name: name };
+             const response = { ok: true, json: async () => newSession };
+             if (!response.ok) throw new Error(`创建失败: ${response.status}`);
+             const createdSession = await response.json();
+             console.log("(API 模式) 新会话已创建:", createdSession);
+             await fetchSessionsAPI(); currentSessionId = createdSession.id; await populateSessionDropdown(); await displaySessionHistory();
+         } catch (error) { console.error("(API 模式) 创建新会话时出错:", error); alert(`通过 API 创建会话失败: ${error.message}`); }
+    } else {
+        console.log(`(本地模式) 尝试创建本地会话: ${name}`);
+        let newName = name; let counter = 1; const baseName = newName;
+        while (historySessions.hasOwnProperty(newName)) { newName = `${baseName} ${counter}`; counter++; }
+        console.log(`(本地模式) 创建本地会话: ${newName}`);
+        historySessions[newName] = []; currentHistorySessionName = newName;
+        populateSessionDropdown(); displaySessionHistory();
+    }
+}
+
+async function addInteractionToHistory(query, answer, type = 'INFO', details = {}) {
+    const historyItemData = {
+        query: query, answer: answer, type: type,
+        details: { vectorAnswer: details.vectorAnswer || '', graphAnswer: details.graphAnswer || '', hybridAnswer: details.hybridAnswer || '' }
     };
-
-    var target = document.getElementById(elementId); // Your canvas element
-    var gauge = new Gauge(target).setOptions(opts); // Create the gauge
-    gauge.maxValue = 100; // Set max gauge value to 100
-    gauge.setMinValue(0);  // Set min value
-    gauge.animationSpeed = 32; // Set animation speed (32 is default)
-    gauge.set(percentage); // Set actual value
-    gauge.setTextField(document.getElementById('percentage' + elementId.slice(-1))); // Set text field for percentage
-    return gauge;
+    if (USE_BACKEND_HISTORY) {
+        const sessionId = currentSessionId;
+        if (!sessionId) { console.error("(API 模式) 无法添加到历史: 未选择会话。"); return null; }
+        console.log(`(API 模式) 正在添加交互到会话 ${sessionId}`);
+        // #backend-integration: POST /api/sessions/${sessionId}/history
+         try {
+             // const response = await fetch(`/api/sessions/${sessionId}/history`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(historyItemData) }); // 实际 Fetch
+             // 模拟成功
+             const savedItem = { ...historyItemData, id: `item-be-${Date.now()}-${sessionId}`, timestamp: new Date().toISOString() };
+             const response = { ok: true, json: async () => savedItem };
+             if (!response.ok) throw new Error(`保存失败: ${response.status}`);
+             const returnedItem = await response.json();
+             console.log("(API 模式) 历史项已保存:", returnedItem);
+             await displaySessionHistory();
+             return returnedItem.id;
+         } catch (error) { console.error("(API 模式) 添加交互到历史时出错:", error); return null; }
+    } else {
+        const sessionName = currentHistorySessionName;
+        if (!sessionName) { console.error("(本地模式) 无法添加到历史: 未选择会话。"); return null; }
+        console.log(`(本地模式) 正在本地添加交互到会话 ${sessionName}`);
+        const localItemId = `item-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+        const timestamp = new Date().toISOString();
+        const newItem = { ...historyItemData, id: localItemId, timestamp: timestamp };
+        if (!historySessions[sessionName]) { historySessions[sessionName] = []; }
+        historySessions[sessionName].push(newItem);
+        displaySessionHistory();
+        return localItemId;
+    }
 }
 
-
-
-function fetchData(itemId, optionValue) {
-    fetch(`/display_generate?item_id=${itemId}&option_value=${optionValue}`)
-        .then(response => response.json())
-        .then(data => {
-            const answerContentDiv = document.querySelector('.answer-content');
-            if (answerContentDiv) {
-                answerContentDiv.innerHTML = `
-                    <strong>Query:</strong> ${data.result.query}<br>
-                    <strong>Answer:</strong> ${data.result.answer}
-                    <strong>Option:</strong> ${optionValue}
-                `;
-            }
-        })
-        .catch(error => {
-            console.error('Error fetching data:', error);
-        });
+function showNewSessionInput() {
+    if (isAddingNewSession) return;
+    isAddingNewSession = true;
+    newHistorySessionButton.style.display = 'none';
+    newSessionInputContainer.style.display = 'inline-flex';
+    newSessionNameInput.value = '';
+    newSessionNameInput.focus();
 }
-// function adjustMainContentHeight() {
-//     const settingBar = document.querySelector('.left-sidebar');
-//     const mainContent = document.querySelector('.main-content');
-//     const header = document.querySelector('.header');
+function hideNewSessionInput() {
+    isAddingNewSession = false;
+    newSessionInputContainer.style.display = 'none';
+    newHistorySessionButton.style.display = 'inline-block';
+}
 
-//     if (!settingBar || !mainContent || !header) {
-//         console.error('One or more elements not found.');
-//         return;
-//     }
+// --- 核心交互逻辑 ---
 
-//     const settingBarHeight = settingBar.clientHeight;  // 使用 clientHeight
+sendButton.addEventListener("click", async () => {
+    if (!isGenerating) {
+        const query = userInput.value.trim(); if (!query) { console.warn("请输入查询内容。"); return; }
+        sendButton.textContent = "生成中..."; sendButton.disabled = true; isGenerating = true;
+        abortController = new AbortController(); let signal = abortController.signal;
+        currentAnswers = { query: query, vector: "", graph: "", hybrid: "" }; displaySelectedAnswer();
+        let generatedData = {}; let historyItemType = 'RED'; let historyItemAnswer = '生成过程中出错'; let fetchError = null;
+        try {
+            // #backend-integration: POST /generate
+            const response = await fetch("/generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ input: query }), signal: signal });
+            if (response.ok) { generatedData = await response.json(); updateAnswerStore(generatedData); displaySelectedAnswer(); historyItemType = 'GREEN'; historyItemAnswer = currentAnswers[ragSelect.value] || generatedData.vectorAnswer || "N/A"; }
+            else { const errorText = await response.text(); historyItemAnswer = `错误: ${errorText}`; fetchError = new Error(`网络响应不成功: ${response.status} ${errorText}`); currentAnswers = { query: query, vector: "错误", graph: "错误", hybrid: "错误" }; displaySelectedAnswer(); }
+        } catch (error) { fetchError = error; if (error.name === "AbortError") { console.log("用户中止了 Fetch 请求。"); historyItemAnswer = "生成已取消"; historyItemType = 'YELLOW'; } else { console.error("Fetch 错误:", error); currentAnswers = { query: query, vector: "错误", graph: "错误", hybrid: "错误" }; displaySelectedAnswer(); if (!error.message?.includes('Network response')) { historyItemAnswer = `错误: ${error.message || '未知 Fetch 错误'}`; } } }
+        finally {
+            await addInteractionToHistory(query, historyItemAnswer, historyItemType, { vectorAnswer: generatedData.vectorAnswer || currentAnswers.vector, graphAnswer: generatedData.graphAnswer || currentAnswers.graph, hybridAnswer: generatedData.hybridAnswer || currentAnswers.hybrid });
+            sendButton.textContent = "Send"; sendButton.disabled = false; isGenerating = false; if (fetchError && fetchError.name !== "AbortError") { console.error("生成失败:", fetchError); }
+        }
+    } else { abortController.abort(); }
+});
 
-//     const headerHeight = header.offsetHeight;
-//     const mainContentPadding = 40;  // main-content 的总 padding (上下各 20px)
+applySettingsButton.addEventListener("click", async () => {
+    if (!selectedDatasetName) { alert("请在选择所有维度后，从列表中选择一个数据集。"); return; }
+    applySettingsButton.disabled = true; applySettingsButton.textContent = "应用中..."; adviceContent.innerHTML = "正在加载建议...";
+    const settingsData = { model_name: modelSelect.value, dataset: selectedDatasetName, key: apiKeyInput.value, top_k: parseInt(document.getElementById("top-k").value) || 5, threshold: parseFloat(document.getElementById("similarity-threshold").value) || 0.8, chunksize: parseInt(document.getElementById("chunk-size").value) || 128, k_hop: parseInt(document.getElementById("k-hop").value) || 1, max_keywords: parseInt(document.getElementById("max-keywords").value) || 10, pruning: document.getElementById("pruning").value === "yes", strategy: document.getElementById("strategy").value || "union", vector_proportion: parseFloat(document.getElementById("vector-proportion").value) || 0.9, graph_proportion: parseFloat(document.getElementById("graph-proportion").value) || 0.8 };
+    console.log("正在应用设置:", settingsData);
+    try {
+        // #backend-integration: POST /load_model 和 GET /get_suggestions
+        const [settingsResult, suggestionResult] = await Promise.allSettled([ fetch("/load_model", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(settingsData) }).then(res => { if (!res.ok) return res.text().then(t => { throw new Error(`应用设置失败: ${res.status} ${t}`) }); return res.json(); }), fetchAndDisplaySuggestions() ]);
+        if (settingsResult.status === 'fulfilled') { console.log("设置应用成功:", settingsResult.value); }
+        else { console.error("应用设置时出错:", settingsResult.reason); alert(`应用设置时出错: ${settingsResult.reason.message}`); adviceContent.innerHTML = `应用设置失败: ${settingsResult.reason.message}`; }
+    } catch (error) { console.error("应用设置时发生意外错误:", error); alert(`发生意外错误: ${error.message}`); adviceContent.innerHTML = `应用设置时发生意外错误。`; }
+    finally { applySettingsButton.disabled = false; applySettingsButton.textContent = "Apply Settings"; }
+});
 
-//     // 计算 main-content 的高度，减去 header 和 padding
-//     const mainContentHeight = settingBarHeight - headerHeight - mainContentPadding;
+// --- 检索结果显示逻辑 ---
 
-//     mainContent.style.height = `${mainContentHeight}px`;
-// }
+async function handleHistoryItemClick(event) {
+     const div = event.currentTarget; const itemId = div.dataset.itemId; if (!itemId) return;
+     let clickedItemData = null; let queryText = 'Loading...';
 
-// // 在页面加载和窗口大小改变时调用该函数
-// window.addEventListener('load', adjustMainContentHeight);
-// window.addEventListener('resize', adjustMainContentHeight);
+     if (USE_BACKEND_HISTORY) {
+         queryText = div.querySelector('p:nth-of-type(2)')?.textContent.replace('Query: ', '') || 'Loading...';
+         // #backend-integration: Optionally fetch full item details from backend if needed
+         // For now, assume we only have ID and query from the list item
+         clickedItemData = { id: itemId, query: queryText }; // Minimal data
+         console.log(`(API 模式) 历史项被点击: ID ${itemId}`);
+     } else {
+         const sessionName = currentHistorySessionName;
+         if (!sessionName || !historySessions[sessionName]) { console.error("本地会话未找到"); return; }
+         clickedItemData = historySessions[sessionName].find(item => item.id === itemId);
+         if (!clickedItemData) { console.error(`无法找到本地项 ID: ${itemId}`); return; }
+         queryText = clickedItemData.query;
+         console.log(`(本地模式) 本地历史项被点击:`, clickedItemData);
+     }
 
+     document.querySelectorAll('.question-item.selected').forEach(el => el.classList.remove('selected')); div.classList.add('selected');
+     vectorContent.innerHTML = '正在加载向量细节...'; if (currentCytoscapeInstance) { currentCytoscapeInstance.destroy(); currentCytoscapeInstance = null; } cyContainer.innerHTML = ''; const cyGraphDiv = document.createElement('div'); cyGraphDiv.id = 'cy'; cyGraphDiv.innerHTML = '<p>正在加载图谱...</p>'; cyContainer.appendChild(cyGraphDiv);
+
+     // Update answer display using data found (either from local store or minimal API data)
+     updateAnswerStore(clickedItemData); displaySelectedAnswer();
+
+     // #backend-integration: GET /get-vector/${itemId} 和 GET /get-graph/${itemId}
+     // Backend needs to handle UUIDs if USE_BACKEND_HISTORY=true, or mock/local IDs if false
+     let vectorResponse, graphResponse;
+     try { console.log(`正在为项 ID 获取细节: ${itemId}`); [vectorResponse, graphResponse] = await Promise.all([ fetch(`/get-vector/${itemId}`), fetch(`/get-graph/${itemId}`) ]);
+         if (vectorResponse.ok) { const d = await vectorResponse.json(); if (d?.chunks) { vectorContent.innerHTML = d.chunks.map((c, i) => `<div class="retrieval-result-item"><p><b>Chunk ${i + 1}:</b> ${c.text || 'N/A'}</p></div>`).join(''); } else { vectorContent.innerHTML = '<p>未找到向量块。</p>'; } } else { const t = await vectorResponse.text(); vectorContent.innerHTML = `<p>向量错误 ${vectorResponse.status}: ${t}</p>`; console.error(`向量 Fetch 失败: ${t}`);}
+         if (graphResponse.ok) { const d = await graphResponse.json(); if (d?.nodes || d?.edges) { renderCytoscapeGraph(d); } else { cyGraphDiv.innerHTML = '<p>未找到图谱数据。</p>'; } } else { const t = await graphResponse.text(); cyGraphDiv.innerHTML = `<p>图谱错误 ${graphResponse.status}: ${t}</p>`; console.error(`图谱 Fetch 失败: ${t}`);}
+     } catch (error) { console.error(`为项 ${itemId} 获取细节时出错:`, error); if (!vectorResponse?.ok) vectorContent.innerHTML = `<p>加载向量细节失败。 ${error.message}</p>`; if (!graphResponse?.ok) cyGraphDiv.innerHTML = `<p>加载图谱细节失败。 ${error.message}</p>`; }
+}
+
+function renderCytoscapeGraph(graphData) {
+    let cyTargetDiv = document.getElementById('cy'); if (!cyTargetDiv) { console.error("Cytoscape 容器 'cy' 在 DOM 中未找到。"); cyContainer.innerHTML = ''; cyTargetDiv = document.createElement('div'); cyTargetDiv.id = 'cy'; cyContainer.appendChild(cyTargetDiv); } else { cyTargetDiv.innerHTML = ''; } if (currentCytoscapeInstance) { currentCytoscapeInstance.destroy(); currentCytoscapeInstance = null; } try { currentCytoscapeInstance = cytoscape({ container: cyTargetDiv, elements: { nodes: graphData.nodes || [], edges: graphData.edges || [] }, style: [ { selector: 'node', style: { 'background-color': 'data(color, "#888")', 'label': 'data(label, id)', 'width': 50, 'height': 50, 'font-size': '10px', 'text-valign': 'center', 'text-halign': 'center', 'color': '#000', 'text-outline-color': '#fff', 'text-outline-width': 1 } }, { selector: 'edge', style: { 'line-color': 'data(color, "#ccc")', 'target-arrow-color': 'data(color, "#ccc")', 'curve-style': 'bezier', 'target-arrow-shape': 'triangle', 'label': 'data(label)', 'width': 2 , 'font-size': '8px', 'text-rotation': 'autorotate', 'text-margin-y': -5, 'color': '#000', 'text-background-color': '#fff', 'text-background-opacity': 0.7, 'text-background-padding': '1px'} }, { selector: '.highlighted-node', style: { 'background-color': '#FF5733', 'border-color': '#E84A27', 'border-width': 3, 'width': 60, 'height': 60, 'z-index': 10, 'shadow-blur': 10, 'shadow-color': '#FF5733', 'shadow-opacity': 0.8 } }, { selector: '.highlighted-edge', style: { 'line-color': '#FF5733', 'target-arrow-color': '#FF5733', 'width': 4, 'z-index': 9, 'shadow-blur': 5, 'shadow-color': '#FF5733', 'shadow-opacity': 0.6 } } ], layout: { name: 'cose', fit: true, padding: 30, animate: true, animationDuration: 500, nodeRepulsion: 400000, idealEdgeLength: 100, nodeOverlap: 20 } }); if (graphData['highlighted-node']?.forEach) { graphData['highlighted-node'].forEach(n => n?.data?.id && currentCytoscapeInstance.getElementById(n.data.id).addClass('highlighted-node')); } if (graphData['highlighted-edge']?.forEach) { graphData['highlighted-edge'].forEach(e => e?.data?.id && currentCytoscapeInstance.getElementById(e.data.id).addClass('highlighted-edge')); } currentCytoscapeInstance.ready(() => { currentCytoscapeInstance.fit(null, 30); }); console.log("Cytoscape 图谱已渲染。"); } catch (error) { console.error("Cytoscape 渲染错误:", error); cyTargetDiv.innerHTML = `<p>渲染图谱时出错: ${error.message}</p>`; currentCytoscapeInstance = null; }
+}
+
+function updateAnswerStore(data) {
+    currentAnswers.query = data.query !== undefined ? data.query : currentAnswers.query;
+    currentAnswers.vector = data.vectorAnswer !== undefined ? data.vectorAnswer : "";
+    currentAnswers.graph = data.graphAnswer !== undefined ? data.graphAnswer : "";
+    currentAnswers.hybrid = data.hybridAnswer !== undefined ? data.hybridAnswer : "";
+    console.log("已更新答案存储:", currentAnswers);
+}
+
+function toggleResize(iconElement, targetType = 'section') {
+    const targetElement = iconElement.closest(targetType === 'section' ? '.section-box' : '.box');
+    if (!targetElement) return; const isEnlarged = targetElement.classList.toggle('enlarged');
+    iconElement.textContent = isEnlarged ? 'fullscreen_exit' : 'fullscreen';
+    if (targetElement.contains(cyContainer) || targetElement.id === 'cy-container') {
+        if (currentCytoscapeInstance) { setTimeout(() => { currentCytoscapeInstance.resize(); currentCytoscapeInstance.fit(null, 30); }, 300); } 
+    }
+}
+
+// --- 初始化 ---
+document.addEventListener('DOMContentLoaded', async () => {
+    console.log("DOM 完全加载并解析。");
+    document.querySelectorAll('.sidebar-section .sidebar-header, .sidebar-section-inner .sidebar-header-inner').forEach((header) => { 
+        const content = header.nextElementSibling; const icon = header.querySelector('.material-icons');
+        if (!header.classList.contains('collapsed')) header.classList.add("collapsed");
+        if (content) content.style.display = "none";
+        if (icon) icon.textContent = 'expand_more'; 
+    }
+);
+    populateSelect(dim1Select, Object.keys(datasetHierarchy));
+    clearSelect(dim2Select);
+    clearSelect(dim3Select);
+    updateDatasetSelection();
+    applySettingsButton.disabled = true;
+    await initializeHistory(); // 初始化历史记录区域 (根据 USE_BACKEND_HISTORY 决定行为)
+    displaySelectedAnswer();
+});
+
+// --- 事件监听器 ---
+ragSelect.addEventListener("change", displaySelectedAnswer);
+dim1Select.addEventListener('change', updateDatasetSelection);
+dim2Select.addEventListener('change', updateDatasetSelection);
+dim3Select.addEventListener('change', updateDatasetSelection);
+historySessionSelect.addEventListener('change', (event) => {
+    const selectedValue = event.target.value;
+    if (USE_BACKEND_HISTORY) { currentSessionId = selectedValue; console.log("(API 模式) 会话已更改为 ID:", currentSessionId); }
+    else { currentHistorySessionName = selectedValue; console.log("(本地模式) 会话已更改为名称:", currentHistorySessionName); }
+    displaySessionHistory();
+});
+newHistorySessionButton.addEventListener('click', showNewSessionInput);
+newSessionNameInput.addEventListener('keydown', (event) => { if (event.key === 'Enter') { event.preventDefault(); handleConfirmNewSession(); } else if (event.key === 'Escape') { hideNewSessionInput(); } });
+cancelNewSessionButton.addEventListener('click', hideNewSessionInput);
