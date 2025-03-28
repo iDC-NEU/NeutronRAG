@@ -1,8 +1,8 @@
 '''
 Author: fzb fzb0316@163.com
 Date: 2024-09-20 13:37:09
-LastEditors: fzb0316 fzb0316@163.com
-LastEditTime: 2024-11-20 20:04:53
+LastEditors: lpz 1565561624@qq.com
+LastEditTime: 2025-03-28 15:11:01
 FilePath: /RAGWebUi_demo/chat/chat_vectorrag.py
 Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
 '''
@@ -76,7 +76,7 @@ class ChatVectorRAG(ChatBase):
         node_result = self.retriver_vector.format_chunks(self.retrieve_result)
         print("retrieve result:",node_result)
 
-        prompt = vectorrag_template.format(message = message,nodes_text = node_result)
+        prompt = llama_prompt_template.format(message = message,nodes_text = node_result)
 
         
         # ic(message)

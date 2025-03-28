@@ -2,16 +2,16 @@
 Author: lpz 1565561624@qq.com
 Date: 2025-03-25 22:46:59
 LastEditors: lpz 1565561624@qq.com
-LastEditTime: 2025-03-27 09:50:19
+LastEditTime: 2025-03-28 14:58:48
 FilePath: /lipz/NeutronRAG/NeutronRAG/backend/evaluator/evaluator.py
 Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AEn
 '''
-from generation_metric import *
-from retrieval_metric import *
-from ragas_evalutor import *
-from file_operation import *
-from get_question_list import *
-from dbname_map import get_data_type
+from .generation_metric import *
+from .retrieval_metric import *
+from .ragas_evalutor import *
+from .file_operation import *
+from .get_question_list import *
+from .dbname_map import get_data_type
 
 home_dir = os.path.expanduser("~")
 multihop_data_path = os.path.join(
@@ -461,7 +461,7 @@ class Evaluator:
 #先以RGB为例
 # rgb_evidence_vector = ""
 #rgb_evidence_graph = ""
-    def evaluate_one_query(self,query_id:int,query:str,response:str,retrieval_result:list,vector_evidence,graph_evidence):
+    def evaluate_one_query(self,query_id:int,query:str,response:str,retrieval_result:list,evidence_path:str,mode:str):
         # precision_scores = 0
         # recall_scores = 0
         # relevance_scores = 0
@@ -469,21 +469,18 @@ class Evaluator:
         # rougeL_score = 0
 
         try:
-            with open(vector_evidence, 'r', encoding='utf-8') as f:
-                vector_data = json.load(f)
-            with open(graph_evidence, 'r', encoding='utf-8') as f:
-                graph_data = json.load(f)
+            with open(evidence_path, 'r', encoding='utf-8') as f:
+                evidence_data = json.load(f)
         except FileNotFoundError as e:
             print(f"Error loading evidence files: {e}") 
             return None
         
-        vector_evidence_item = [item for item in vector_data if item.get('id') == query_id][0]
-        graph_evidence_item = [item for item in graph_data if item.get('id') == query_id][0]
-        ground_truth = vector_evidence_item["answer"]
+        evidence_item = [item for item in evidence_data if item.get('id') == query_id][0]
+        ground_truth = evidence_item["answer"]
         if self.data_name == "rgb":
             ground_truth = self.list_to_string(ground_truth)
 
-        if not vector_evidence_item and not graph_evidence_item:
+        if not evidence_item:
             print(f"No evidence found for query ID {query_id}")
             return None
         
@@ -505,7 +502,7 @@ class Evaluator:
         # hallucinations_score = self.ragas_evalutor.evaluate_hallucinations(
         #             query, response,  retrieval_result)
         
-        ground_truth_context = vector_evidence_item["evidences"]
+        ground_truth_context = evidence_item["evidences"]
         if isinstance(ground_truth_context, str):
             ground_truth_context = [ground_truth_context]
         else:
@@ -516,22 +513,23 @@ class Evaluator:
         precision_scores = self.retrieval_evalutor.evaluation_precision(
                 retrieval_result, ground_truth_context)
         relevance_scores =   self.retrieval_evalutor.evaluation_relevance(
-                retrieval_result, ground_truth_context, mode=self.mode)
+                retrieval_result, ground_truth_context, mode=mode)
         recall_scores = self.retrieval_evalutor.evaluation_recall(
-                retrieval_result, ground_truth_context, mode=self.mode)
+                retrieval_result, ground_truth_context, mode=mode)
         
         result = {
+        "strategy":"vector",
         "metrics": {
             "retrieval_metrics": {
-                "precision": {precision_scores},
-                "recall": {recall_scores},
-                "relevance": {relevance_scores}
+                "precision": precision_scores,
+                "recall": recall_scores,
+                "relevance": relevance_scores
             },
             "generation_metrics": {
                 "answer_correctness": 0,
                 "rougeL_score": 0,
-                "hallucinations_score": {hallucinations_score},
-                "exact_match": {exact_match}
+                "hallucinations_score": hallucinations_score,
+                "exact_match": exact_match
             }
         }
     }
@@ -642,6 +640,7 @@ if __name__ == '__main__':
             "The admission record <-Signed- Dr. emily watson"
         ]
     }}
+    
 
     process_retrieval_texts = [
         path_text for each_graph in data['retrieve_results'].values() for path_text in each_graph]
@@ -652,7 +651,7 @@ if __name__ == '__main__':
 #  /home/chency/NeutronRAG/neutronrag/results/response/rgb/vectorrag/top5_2024-11-26_21-32-23.json
     retrieve_results = ["Your stage-by-stage guide to the winners of the 2022 Tour","Your stage-by-stage guide to the winners of the 2022 Tour. Denmark's Jonas Vingegaard (Jumbo-Visma) won the yellow jersey as the overall winner of the 2022 Tour de France. The 25-year-old outlasted two-time defending champion Tadej Pogačar (UAE Team Emirates) of Slovenia to win his first Tour. Pogačar finished second, 2:43 back of Vingegaard, and Great Britain's Geraint Thomas (INEOS Grenadiers) was third, 7:22 behind the lead, to round out the podium for the Tour's General Classification. Here’s a look at how every stage of the 2022 Tour unfolded.  Results From Every Stage Full Leaderboard Who Won the Tour? Surrounded by his teammates, Denmark’s Jonas Vingegaard (Jumbo-Visma) finished safely behind the peloton at the end of Stage 21 in Paris to win the 2022 Tour de France. The Dane won the Tour by 3:34 over Slovenia’s Tadej Pogačar (UAE Team Emirates), who started the race as the two-time defending champion, and 8:13 over Great Britain’s Geraint Thomas (INEOS Grenadiers), who won the Tour in 2018 and finished second in 2019."]
     result = evalutor_test.evaluate_one_query(query_id=83,query="Who won the 2022 Tour de France?",retrieval_result=retrieve_results,response="Denmark's Jonas Vingegaard (Jumbo-Visma) won the yellow jersey as the overall winner of the 2022 Tour de France.",
-                                     vector_evidence="rgb_evidence_test.json",graph_evidence="rgb_evidence_test.json")
+                                     evidence_path="rgb_evidence_test.json")
     
 
     print(result)

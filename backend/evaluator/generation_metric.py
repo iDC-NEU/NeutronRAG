@@ -1,5 +1,5 @@
 from rouge_score import rouge_scorer
-from pruning import *
+from .pruning import *
 
 
 class QAGenerationEvalutor:
