@@ -3,23 +3,23 @@
 ```bash
 
 
-# 创建conda环境：python >= 3.10
+# Create conda environment: python >= 3.10
 conda create --name llmrag python=3.10.14 -y
 
 conda activate llmrag
 
-# 安装相关的python包：
+# Install required Python packages:
 pip install -r requirements.txt
 
 ```
 
-# 测试OLlama是否可用：
+# Test if OLlama is available:
 ```bash
 ollama run llama2:7b
 ```
 
 
-📦 部署图数据库
+📦 Deploy Graph Database
 1. NebulaGraph Installation Guide
 Step 1: Install docker-compose
 Ensure that you have docker-compose installed. If not, you can install it with the following command:
@@ -68,7 +68,7 @@ docker run -d --name nebula-graph \
 
 
 
-2. Neo4j(暂时可以不安装)
+2. Neo4j (Installation optional for now)
 
 
 
@@ -77,42 +77,39 @@ docker run -d --name nebula-graph \
 
 # 💄Run 
 ```
-#配置临时环境变量环境
-例子 export PYTHONPATH=$PYTHONPATH:/home/lipz/RAGWebUi/RAGWebUi_demo/backend
+# Configure temporary environment variables
+Example export PYTHONPATH=$PYTHONPATH:/home/lipz/RAGWebUi/RAGWebUi_demo/backend
 export PYTHONPATH=$PYTHONPATH:/your/path/backend
 
 ```
 
 ```
-# 执行一个weiui，以显示前端网页： 
+# Run a WebUI to display the frontend interface: 
 python webui_chat.py
 
-# 使用另一个终端执行一个图的网页，用来在前端网页中显示图拓扑：
+# Use another terminal to run a graph-based UI to display topology in the frontend:
 python graph.py
 ```
 
 ```
-# 使用后端执行主要为了做一些研究工作：
+# Running the backend mainly for research purposes:
 python backend_chat.py --dataset_name "rgb" --llm "llama2:7b" --func "Graph RAG" --graphdb "nebulagraph" --vectordb "MilvusDB"
 ```
 
 # Notion
 
-1. 现在弃用了.env文件的读取方式，改为客户端输入。包括大模型的名字
-2. ./llmragenv/llmrag_env.py 中，有一个low_chat的方法，这个是一个阉割的输入，大模型的名字、数据库的使用等参数直接在这里指定了；而web_chat是一个全的版本
-3. 关于大模型的支持：在llm_factory中由llm_provider字典，包含了现在支持的运行在本地的大模型。（因为使用商用大模型的api_key付费，这里暂时不开放，但可以自己去买，相关配置在./config/config-local.ymal）
-4. 网页端口与数据库相关配置在./config/config-local.ymal进行更改（向量数据库与nebulagraph在代码里指定，这里需要重构）
-5. 代码架构：
+1. .env file loading is deprecated. Now uses client input, including LLM name
+2. The method low_chat() in ./llmragenv/llmrag_env.py is a simplified input version where the LLM name, database usage, etc., are hardcoded. The web_chat method is the full version.
+3. LLM support: The llm_provider dictionary in llm_factory lists all currently supported local models. (Commercial model API keys are not enabled here due to cost, but users can purchase them separately and configure in ./config/config-local.yaml.)
+4. Frontend ports and database configurations can be modified in ./config/config-local.yaml (vector DB and NebulaGraph are hardcoded in the code, and need refactoring)
+5. Code structure:
 ![avatar](./resource/codestruc/codestruc.bmp)
 
 
-# 问题：
-web_chat()中虽然可以指定每次聊天的大模型，但是问题是启动网页之后只有第一次的输入是有用的，后续大模型都只用最开始选的那个。
-# 代码结构：
-
-Chat:
-/<yourpath>/RAGWebUi_demo/chat
-graphrag和vectorrag
+# Issue:
+Although web_chat() allows selecting a different LLM for each chat session, in practice, only the first selection takes effect—subsequent interactions always use the initially chosen model.
+# Code Structure:
+Includes graphrag and vectorrag
 
 
 
