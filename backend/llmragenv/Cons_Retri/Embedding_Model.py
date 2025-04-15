@@ -2,7 +2,7 @@
 Author: fzb0316 fzb0316@163.com
 Date: 2024-09-21 19:23:18
 LastEditors: lpz 1565561624@qq.com
-LastEditTime: 2025-02-10 17:15:47
+LastEditTime: 2025-04-08 15:32:41
 FilePath: /BigModel/RAGWebUi_demo/llmragenv/Cons_Retri/Embedding_Model.py
 Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
 '''
@@ -23,7 +23,7 @@ class EmbeddingEnv:
     def __init__(self,
                  embed_name="BAAI/bge-large-en-v1.5",
                  embed_batch_size=20,
-                 device="cuda:0"):
+                 device="cuda:2"):
         self.embed_name = embed_name
         self.embed_batch_size = embed_batch_size
 

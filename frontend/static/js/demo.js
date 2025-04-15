@@ -50,22 +50,22 @@ let currentHistorySessionName = "Default Session";
 const datasetHierarchy = {
     "Single-hop": {
         "Specific": {
-            "Single-object": ["RGB[3]", "RAGAS[9]", "RECALL[31]", "CRUD-RAG [33]", "ARES[41]", "RAGEval[60]"],
+            "Single-object": ["rgb", "RAGAS", "RECALL", "CRUD-RAG", "ARES", "RAGEval"],
             "Multi-object": []
         },
         "Ambiguous": {
-            "Single-object": ["RAGAS[9]", "RAGEval[60]"],
+            "Single-object": ["RAGAS", "RAGEval"],
             "Multi-object": []
         }
     },
     "Multi-hop": {
         "Specific": {
-            "Single-object": ["ARES[41]"],
-            "Multi-object": ["RGB[3]", "Multi-hop[46]", "RAGEval[60]"]
+            "Single-object": ["ARES"],
+            "Multi-object": ["rgb", "Multi-hop", "RAGEval"]
         },
         "Ambiguous": {
-            "Single-object": ["CRUD-RAG [33]"],
-            "Multi-object": ["Multi-hop[46]", "CRUD-RAG [33]"]
+            "Single-object": ["CRUD-RAG"],
+            "Multi-object": ["Multi-hop", "CRUD-RAG"]
         }
     }
 };
@@ -420,17 +420,59 @@ sendButton.addEventListener("click", async () => {
 });
 
 applySettingsButton.addEventListener("click", async () => {
-    if (!selectedDatasetName) { alert("请在选择所有维度后，从列表中选择一个数据集。"); return; }
-    applySettingsButton.disabled = true; applySettingsButton.textContent = "应用中..."; adviceContent.innerHTML = "正在加载建议...";
-    const settingsData = { model_name: modelSelect.value, dataset: selectedDatasetName, key: apiKeyInput.value, top_k: parseInt(document.getElementById("top-k").value) || 5, threshold: parseFloat(document.getElementById("similarity-threshold").value) || 0.8, chunksize: parseInt(document.getElementById("chunk-size").value) || 128, k_hop: parseInt(document.getElementById("k-hop").value) || 1, max_keywords: parseInt(document.getElementById("max-keywords").value) || 10, pruning: document.getElementById("pruning").value === "yes", strategy: document.getElementById("strategy").value || "union", vector_proportion: parseFloat(document.getElementById("vector-proportion").value) || 0.9, graph_proportion: parseFloat(document.getElementById("graph-proportion").value) || 0.8 };
+    if (!selectedDatasetName) { 
+        alert("请在选择所有维度后，从列表中选择一个数据集。"); 
+        return; 
+    }
+    
+    applySettingsButton.disabled = true; 
+    applySettingsButton.textContent = "应用中..."; 
+    adviceContent.innerHTML = "正在加载建议...";
+    
+    const settingsData = { 
+        model_name: modelSelect.value, 
+        dataset: selectedDatasetName, 
+        key: apiKeyInput.value, 
+        top_k: parseInt(document.getElementById("top-k").value) || 5, 
+        threshold: parseFloat(document.getElementById("similarity-threshold").value) || 0.8, 
+        chunksize: parseInt(document.getElementById("chunk-size").value) || 128, 
+        k_hop: parseInt(document.getElementById("k-hop").value) || 1, 
+        max_keywords: parseInt(document.getElementById("max-keywords").value) || 10, 
+        pruning: document.getElementById("pruning").value === "yes", 
+        strategy: document.getElementById("strategy").value || "union", 
+        vector_proportion: parseFloat(document.getElementById("vector-proportion").value) || 0.9, 
+        graph_proportion: parseFloat(document.getElementById("graph-proportion").value) || 0.8 
+    };
+    
     console.log("正在应用设置:", settingsData);
+    
     try {
-        // #backend-integration: POST /load_model 和 GET /get_suggestions
-        const [settingsResult, suggestionResult] = await Promise.allSettled([ fetch("/load_model", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(settingsData) }).then(res => { if (!res.ok) return res.text().then(t => { throw new Error(`应用设置失败: ${res.status} ${t}`) }); return res.json(); }), fetchAndDisplaySuggestions() ]);
-        if (settingsResult.status === 'fulfilled') { console.log("设置应用成功:", settingsResult.value); }
-        else { console.error("应用设置时出错:", settingsResult.reason); alert(`应用设置时出错: ${settingsResult.reason.message}`); adviceContent.innerHTML = `应用设置失败: ${settingsResult.reason.message}`; }
-    } catch (error) { console.error("应用设置时发生意外错误:", error); alert(`发生意外错误: ${error.message}`); adviceContent.innerHTML = `应用设置时发生意外错误。`; }
-    finally { applySettingsButton.disabled = false; applySettingsButton.textContent = "Apply Settings"; }
+        // 修复1: 直接使用 fetch 和 await，不需要 Promise.allSettled
+        const response = await fetch("/load_model", { 
+            method: "POST", 
+            headers: { "Content-Type": "application/json" }, 
+            body: JSON.stringify(settingsData) 
+        });
+        
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`应用设置失败: ${response.status} ${errorText}`);
+        }
+        
+        const result = await response.json();
+        console.log("设置应用成功:", result);
+        
+        // 可以在这里调用 fetchAndDisplaySuggestions() 如果需要
+        // await fetchAndDisplaySuggestions();
+        
+    } catch (error) { 
+        console.error("应用设置时发生错误:", error); 
+        alert(`发生错误: ${error.message}`); 
+        adviceContent.innerHTML = `应用设置时发生错误: ${error.message}`; 
+    } finally { 
+        applySettingsButton.disabled = false; 
+        applySettingsButton.textContent = "Apply Settings"; 
+    }
 });
 
 // --- 检索结果显示逻辑 ---

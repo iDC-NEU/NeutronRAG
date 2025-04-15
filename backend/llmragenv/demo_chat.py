@@ -2,7 +2,7 @@
 Author: lpz 1565561624@qq.com
 Date: 2025-03-19 20:28:13
 LastEditors: lpz 1565561624@qq.com
-LastEditTime: 2025-03-28 15:08:03
+LastEditTime: 2025-04-15 15:25:53
 FilePath: /lipz/NeutronRAG/NeutronRAG/backend/llmragenv/demo_chat.py
 Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
 '''
@@ -236,7 +236,7 @@ class Demo_chat:
                  threshold=0.5,
                  chunksize=100,
                  k_hop=2,
-                 keywords=None,
+                 keywords=5,
                  pruning=False,
                  strategy="Union",
                  api_key="ollama",
@@ -280,8 +280,10 @@ class Demo_chat:
         
 
     def load_llm(self, model_name, url, api_key):
+        print(model_name,url)
         try:
             llm = ClientFactory(model_name, url, api_key).get_client()
+            print("成功加载模型",llm)
             return llm
         except Exception as e:
             print(f"Failed to load LLM: {e}")

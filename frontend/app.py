@@ -11,6 +11,7 @@ from flask_cors import CORS
 from zhipuai import ZhipuAI
 from user import User
 from llmragenv.llmrag_env import LLMRAGEnv
+from llmragenv.demo_chat import *
 from evaluator import simulate
 from llmragenv.demo_chat import Demo_chat
 import threading
@@ -674,6 +675,7 @@ def load_model():
         url = data.get("url") # url 在 Demo_chat 中似乎未使用 (原始注释)
         key = data.get("key")
         dataset = data.get("dataset") # 获取数据集名称
+
         if key == "" or key is None: # 处理空或 None 的 key
             key = "ollama" # 默认 key
         print(f"Received /load_model: model={model_name}, key={'<default_ollama>' if key=='ollama' else '<provided>'}, dataset={dataset}") # 修正日志

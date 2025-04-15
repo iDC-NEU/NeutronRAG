@@ -2,7 +2,7 @@
 Author: fzb fzb0316@163.com
 Date: 2024-09-20 13:37:09
 LastEditors: lpz 1565561624@qq.com
-LastEditTime: 2025-03-20 09:56:41
+LastEditTime: 2025-04-08 15:46:23
 FilePath: /RAGWebUi_demo/llmragenv/LLM/llm_factory.py
 Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
 '''
@@ -37,7 +37,7 @@ LLMProvider = {
 
 class ClientFactory(metaclass=Singleton):
     
-    def __init__(self, model_name, url, key, llmbackend="openai"):
+    def __init__(self, model_name, url, key, llmbackend="llama_index"):
         """
         初始化 ClientFactory
 
@@ -91,6 +91,7 @@ class ClientFactory(metaclass=Singleton):
                 raise ClientAPIUnsupportedError(f"No client API adapted for model: {self.model_name}")
 
         elif self.llmbackend == "llama_index":
+            print("use llama-index")
             if self.model_name in LLMProvider["llama"]:
                 return OllamaClient(self.model_name, self.url, self.key)
 
