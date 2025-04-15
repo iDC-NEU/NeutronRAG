@@ -339,6 +339,25 @@ def get_graph(item_id):
         return jsonify({'error': f'Data format error for graph item {item_id}'}), 500
 
 
+
+@app.route('/get-dataset', methods=['POST'])
+def get_dataset():
+    data = request.get_json()
+    hop = data.get('hop')
+    type = data.get('type')
+    entity = data.get('entity')
+    dataset = data.get('dataset')
+    # {'hop': 'single_hop', 'type': 'specific', 'entity': 'single_entity', 'dataset': 'rgb'}
+    print(data,hop,type,entity,dataset)
+    relative_path = f"../data/{hop}/{type}/{entity}/{dataset}/{dataset}.json"
+    # if os.path.exists(relative_path):
+    #     print("############存在#############")
+
+
+
+
+
+
 @app.route('/read-file', methods=['GET'])
 def read_file():
     try:
@@ -359,6 +378,15 @@ def read_file():
     except Exception as e:
         print(f"Error reading file {file_path}: {e}")
         return jsonify({'error': str(e)}), 500
+
+
+
+
+
+
+
+
+
 
 @app.route('/get-vector/<item_id>', methods=['GET'])
 def get_vector(item_id):

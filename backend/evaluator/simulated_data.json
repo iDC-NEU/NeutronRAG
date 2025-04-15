@@ -1,0 +1,13 @@
+{"id":0,"question":"This is a sample question","retrieval_metric":{"precision":0.413098,"relevance":0.536507,"recall":0.721081},"generation_metric":{"exact_match":0,"faithfulness":0.81718}}
+{"id":1,"question":"This is a sample question","retrieval_metric":{"precision":0.475082,"relevance":0.963528,"recall":0.495525},"generation_metric":{"exact_match":1,"faithfulness":0.067881}}
+{"id":2,"question":"This is a sample question","retrieval_metric":{"precision":0.402943,"relevance":0.350817,"recall":0.374586},"generation_metric":{"exact_match":0,"faithfulness":0.55186}}
+{"id":3,"question":"This is a sample question","retrieval_metric":{"precision":0.520609,"relevance":0.185811,"recall":0.97609},"generation_metric":{"exact_match":0,"faithfulness":0.736725}}
+{"id":4,"question":"This is a sample question","retrieval_metric":{"precision":0.230296,"relevance":0.384889,"recall":0.221337},"generation_metric":{"exact_match":0,"faithfulness":0.410367}}
+{"id":0,"question":"This is a sample question","retrieval_metric":{"precision":0.353309,"relevance":0.570039,"recall":0.69326},"generation_metric":{"exact_match":0,"faithfulness":0.655585}}
+{"id":1,"question":"This is a sample question","retrieval_metric":{"precision":0.312429,"relevance":0.280456,"recall":0.720809},"generation_metric":{"exact_match":0,"faithfulness":0.329005}}
+{"id":2,"question":"This is a sample question","retrieval_metric":{"precision":0.036892,"relevance":0.947626,"recall":0.96574},"generation_metric":{"exact_match":0,"faithfulness":0.278757}}
+{"id":3,"question":"This is a sample question","retrieval_metric":{"precision":0.874342,"relevance":0.22952,"recall":0.478902},"generation_metric":{"exact_match":0,"faithfulness":0.232029}}
+{"id":4,"question":"This is a sample question","retrieval_metric":{"precision":0.372075,"relevance":0.187962,"recall":0.697674},"generation_metric":{"exact_match":0,"faithfulness":0.665051}}
+{"id":0,"question":"This is a sample question","retrieval_metric":{"precision":0.511638,"relevance":0.027298,"recall":0.095868},"generation_metric":{"exact_match":0,"faithfulness":0.785395}}
+{"id":1,"question":"This is a sample question","retrieval_metric":{"precision":0.436316,"relevance":0.047149,"recall":0.591085},"generation_metric":{"exact_match":1,"faithfulness":0.450578}}
+{"id":2,"question":"This is a sample question","retrieval_metric":{"precision":0.047089,"relevance":0.636138,"recall":0.729497},"generation_metric":{"exact_match":1,"faithfulness":0.840274}}

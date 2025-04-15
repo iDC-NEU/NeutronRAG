@@ -48,24 +48,24 @@ let currentHistorySessionName = "Default Session";
 
 // --- 数据集层级结构 ---
 const datasetHierarchy = {
-    "Single-hop": {
-        "Specific": {
-            "Single-object": ["rgb", "RAGAS", "RECALL", "CRUD-RAG", "ARES", "RAGEval"],
-            "Multi-object": []
+    "single_hop": {
+        "specific": {
+            "single_entity": ["rgb", "RAGAS", "RECALL", "CRUD-RAG", "ARES", "RAGEval"],
+            "multi_entity": []
         },
-        "Ambiguous": {
-            "Single-object": ["RAGAS", "RAGEval"],
-            "Multi-object": []
+        "ambiguous": {
+            "single_entity": ["RAGAS", "RAGEval"],
+            "multi_entity": []
         }
     },
-    "Multi-hop": {
-        "Specific": {
-            "Single-object": ["ARES"],
-            "Multi-object": ["rgb", "Multi-hop", "RAGEval"]
+    "multi_hop": {
+        "specific": {
+            "single_entity": ["ARES"],
+            "multi_entity": ["rgb", "Multi-hop", "RAGEval"]
         },
-        "Ambiguous": {
-            "Single-object": ["CRUD-RAG"],
-            "Multi-object": ["Multi-hop", "CRUD-RAG"]
+        "ambiguous": {
+            "single_entity": ["CRUD-RAG"],
+            "multi_entity": ["Multi-hop", "CRUD-RAG"]
         }
     }
 };
@@ -424,10 +424,46 @@ applySettingsButton.addEventListener("click", async () => {
         alert("请在选择所有维度后，从列表中选择一个数据集。"); 
         return; 
     }
+    const hop = document.getElementById("dim1-hops").value;
+    const type = document.getElementById("dim2-task").value;
+    const entity = document.getElementById("dim3-scale").value;
+    if (!hop || !type || !entity ||!selectedDatasetName) {
+        alert("请完整选择三个下拉框的内容！");
+        return;
+    }
+
     
     applySettingsButton.disabled = true; 
     applySettingsButton.textContent = "应用中..."; 
     adviceContent.innerHTML = "正在加载建议...";
+
+    try {
+        const postData = {
+            hop: hop,
+            type: type,
+            entity: entity,
+            dataset: selectedDatasetName
+        };
+        fetch('/get-dataset', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(postData)
+        }).catch(error => {
+            console.error("请求失败:", error);
+        });
+    
+        console.log("数据集加载请求已发送（POST），不等待结果。");
+    
+    } catch (error) {
+        console.error("构造请求失败:", error);
+        alert("发生错误，无法发送数据集请求。");
+    } finally {
+        applySettingsButton.disabled = false; 
+        applySettingsButton.textContent = "应用设置"; 
+    }
+
     
     const settingsData = { 
         model_name: modelSelect.value, 
