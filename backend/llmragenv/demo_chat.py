@@ -2,7 +2,7 @@
 Author: lpz 1565561624@qq.com
 Date: 2025-03-19 20:28:13
 LastEditors: lpz 1565561624@qq.com
-LastEditTime: 2025-04-15 15:25:53
+LastEditTime: 2025-04-15 23:24:10
 FilePath: /lipz/NeutronRAG/NeutronRAG/backend/llmragenv/demo_chat.py
 Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
 '''
@@ -25,6 +25,7 @@ import subprocess
 import os
 import json
 import sys
+from tqdm import tqdm
 
 def append_to_json_list(filepath, new_data):
     # 如果文件不存在或为空，创建新列表
@@ -231,7 +232,8 @@ class Demo_chat:
 
     def __init__(self,
                  model_name,
-                 dataset,
+                 dataset_path,
+                 dataset_name,
                  top_k=5,
                  threshold=0.5,
                  chunksize=100,
@@ -257,7 +259,10 @@ class Demo_chat:
         :param strategy: 检索或生成的策略
         """
         self.model_name = model_name
-        self.dataset = dataset
+        self.dataset_name = dataset_name
+        base_path = os.getcwd()
+        relative_path = os.path.relpath(dataset_path, base_path)
+        self.dataset_path = relative_path
         self.top_k = top_k
         self.threshold = threshold
         self.chunksize = chunksize
@@ -269,12 +274,20 @@ class Demo_chat:
         #自动匹配 URL
         self.url = self.Model_Url_Mapping.get(model_name, "http://localhost:11434/v1")  # 若没有匹配上的模型，则默认使用 Ollama
         self.llm = self.load_llm(self.model_name,self.url,self.api_key)
-        self.vectordb = MilvusDB(dataset, 1024, overwrite=False, store=True,retriever=True)
+        self.vectordb = MilvusDB(dataset_name, 1024, overwrite=False, store=True,retriever=True)
         self.graphdb = GraphDBFactory("nebulagraph").get_graphdb(space_name='rgb')
         self.chat_graph = ChatGraphRAG(self.llm, self.graphdb)
         self.chat_vector = ChatVectorRAG(self.llm,self.vectordb)
-        self.path_name = path_name
-        self.evaluator = Evaluator(data_name=dataset,mode=strategy)
+        path_name = f"chat_history/{dataset_name}/{path_name}.json"
+        output_folder = f"chat_history/{dataset_name}"
+        base_path = os.path.dirname(os.path.abspath(__file__))
+        full_output_folder = os.path.join(base_path, output_folder)
+        if not os.path.exists(full_output_folder):
+            os.makedirs(full_output_folder)
+
+        self.path_name = os.path.join(base_path, path_name)
+        
+        self.evaluator = Evaluator(data_name=dataset_name,mode=strategy)
 
 
         
@@ -342,9 +355,39 @@ class Demo_chat:
 
         answers = self.llm.chat_with_ai(prompt, history)
         return answers
-        
 
-        
+#按这个格式       
+# {"id":,"query";,vector_response:,graph_response:,hybrid_response,vector_retrieval_result,raph_retrieval_result}
+
+
+    def new_history_chat(self, mode="rewrite"):
+        with open(self.dataset_path, "r") as f:  # 读取模式改为'r'，避免覆盖原数据
+            data = json.load(f)
+
+        # 使用 tqdm 显示进度条
+            for item in tqdm(data, desc="Processing items", unit="item"):  # 显示进度条
+                query = item["query"]
+                response_vector = self.chat_vector.web_chat(message=query, history=None)
+                response_graph = self.chat_graph.web_chat(message=query, history=None)
+                response_hybrid = self.hybrid_chat(message=query)
+                vector_retrieval_result = self.chat_vector.retrieval_result()
+                graph_retrieval_result = self.chat_graph.retrieval_result()
+
+                # 创建新的数据项
+                item_data = {
+                    "id": item.get("id", None),
+                    "query": query,
+                    "vector_response": response_vector,
+                    "graph_response": response_graph,
+                    "hybrid_response": response_hybrid,
+                    "vector_retrieval_result": vector_retrieval_result,
+                    "graph_retrieval_result": graph_retrieval_result
+                }
+
+                with open(self.path_name, 'a') as f: 
+                            json.dump(item_data, f, separators=(',', ':'))  # 使用 ',' 和 ':' 分隔符
+                            f.write('\n')  # 每个元素占一行
+
 
 
 

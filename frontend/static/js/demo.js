@@ -431,43 +431,51 @@ applySettingsButton.addEventListener("click", async () => {
         alert("请完整选择三个下拉框的内容！");
         return;
     }
+        // try {
+    const postData = {
+        hop: hop,
+        type: type,
+        entity: entity,
+        dataset: selectedDatasetName
+    };
+    // try {
+    //     const postData = {
+    //         hop: hop,
+    //         type: type,
+    //         entity: entity,
+    //         dataset: selectedDatasetName
+    //     };
+    //     fetch('/get-dataset', {
+    //         method: 'POST',
+    //         headers: {
+    //             'Content-Type': 'application/json'
+    //         },
+    //         body: JSON.stringify(postData)
+    //     }).catch(error => {
+    //         console.error("请求失败:", error);
+    //     });
+    
+    //     console.log("数据集加载请求已发送（POST），不等待结果。");
+    
+    // } catch (error) {
+    //     console.error("构造请求失败:", error);
+    //     alert("发生错误，无法发送数据集请求。");
+    // } finally {
+    //     applySettingsButton.disabled = false; 
+    //     applySettingsButton.textContent = "应用设置"; 
+    // }
+
 
     
     applySettingsButton.disabled = true; 
     applySettingsButton.textContent = "应用中..."; 
     adviceContent.innerHTML = "正在加载建议...";
 
-    try {
-        const postData = {
-            hop: hop,
-            type: type,
-            entity: entity,
-            dataset: selectedDatasetName
-        };
-        fetch('/get-dataset', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(postData)
-        }).catch(error => {
-            console.error("请求失败:", error);
-        });
-    
-        console.log("数据集加载请求已发送（POST），不等待结果。");
-    
-    } catch (error) {
-        console.error("构造请求失败:", error);
-        alert("发生错误，无法发送数据集请求。");
-    } finally {
-        applySettingsButton.disabled = false; 
-        applySettingsButton.textContent = "应用设置"; 
-    }
 
     
     const settingsData = { 
+        dataset: postData,
         model_name: modelSelect.value, 
-        dataset: selectedDatasetName, 
         key: apiKeyInput.value, 
         top_k: parseInt(document.getElementById("top-k").value) || 5, 
         threshold: parseFloat(document.getElementById("similarity-threshold").value) || 0.8, 

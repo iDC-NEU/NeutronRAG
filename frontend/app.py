@@ -340,17 +340,17 @@ def get_graph(item_id):
 
 
 
-@app.route('/get-dataset', methods=['POST'])
-def get_dataset():
-    data = request.get_json()
-    hop = data.get('hop')
-    type = data.get('type')
-    entity = data.get('entity')
-    dataset = data.get('dataset')
-    # {'hop': 'single_hop', 'type': 'specific', 'entity': 'single_entity', 'dataset': 'rgb'}
-    print(data,hop,type,entity,dataset)
-    relative_path = f"../data/{hop}/{type}/{entity}/{dataset}/{dataset}.json"
-    # if os.path.exists(relative_path):
+# @app.route('/get-dataset', methods=['POST'])
+# def get_dataset():
+#     data = request.get_json()
+#     hop = data.get('hop')
+#     type = data.get('type')
+#     entity = data.get('entity')
+#     dataset = data.get('dataset')
+#     # {'hop': 'single_hop', 'type': 'specific', 'entity': 'single_entity', 'dataset': 'rgb'}
+#     print(data,hop,type,entity,dataset)
+#     relative_path = f"../data/{hop}/{type}/{entity}/{dataset}/{dataset}.json"
+    # # if os.path.exists(relative_path):
     #     print("############存在#############")
 
 
@@ -693,6 +693,22 @@ def logout():
     session.clear()
     return jsonify({"message": "注销成功"}), 200
 
+
+# @app.route('/get-dataset', methods=['POST'])
+# def get_dataset():
+#     data = request.get_json()
+#     hop = data.get('hop')
+#     type = data.get('type')
+#     entity = data.get('entity')
+#     dataset = data.get('dataset')
+#     # {'hop': 'single_hop', 'type': 'specific', 'entity': 'single_entity', 'dataset': 'rgb'}
+#     print(data,hop,type,entity,dataset)
+#     relative_path = f"../data/{hop}/{type}/{entity}/{dataset}/{dataset}.json"
+    # # if os.path.exists(relative_path):
+    #     print("############存在#############")
+
+
+
 # --- 模型加载接口 (原始) ---
 @app.route('/load_model', methods=['POST'])
 def load_model():
@@ -702,8 +718,12 @@ def load_model():
         model_name = data.get("model_name")
         url = data.get("url") # url 在 Demo_chat 中似乎未使用 (原始注释)
         key = data.get("key")
-        dataset = data.get("dataset") # 获取数据集名称
-
+        dataset_info = data.get("dataset") # 获取数据集名称
+        hop = dataset_info.get('hop')
+        type = dataset_info.get('type')
+        entity = dataset_info.get('entity')
+        dataset = dataset_info.get('dataset')
+        dataset_path = f"../data/{hop}/{type}/{entity}/{dataset}/{dataset}.json"    
         if key == "" or key is None: # 处理空或 None 的 key
             key = "ollama" # 默认 key
         print(f"Received /load_model: model={model_name}, key={'<default_ollama>' if key=='ollama' else '<provided>'}, dataset={dataset}") # 修正日志
@@ -721,12 +741,12 @@ def load_model():
 
         # 加载新模型
         print(f"正在加载模型: {model_name} (API Key: {'*'*(len(key)-3)+key[-3:] if key != 'ollama' and key else 'ollama'}, 数据集: {dataset})")
-        current_model = Demo_chat(model_name=model_name, api_key=key, dataset=dataset) # 传递数据集参数
+        current_model = Demo_chat(model_name=model_name, api_key=key, dataset_name=dataset,dataset_path=dataset_path) # 传递数据集参数
 
         # 测试模型 (原始逻辑)
         test_result = current_model.chat_test() # 假设 chat_test 不需要输入
         print(f"模型测试结果: {test_result}")
-
+        current_model.new_history_chat()
         return jsonify({"status": "success", "message": f"模型 {model_name} (数据集: {dataset}) 加载成功"}), 200
 
     except Exception as e:
