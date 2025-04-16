@@ -809,6 +809,39 @@ def add_history_item(sessionId):
     print(f"(模拟) 已添加历史项 {item_id} 到会话 {sessionId}")
     return jsonify(new_item), 201
 
+@app.route('/list-history', methods=['POST'])  # 改为 POST，接收 JSON 数据
+def list_history_files():
+    # 解析前端传来的 JSON 数据
+    data = request.get_json()
+    dataset_name = data.get("selectedDatasetName")
+    
+    print(f"收到请求，数据集名: {dataset_name}")  # 调试日志
+
+    if not dataset_name:
+        return jsonify({"files": [], "error": "Missing dataset name"}), 400
+
+    # 获取目标 chat_history 子目录路径
+    history_dir = os.path.abspath(
+        os.path.join(os.path.dirname(__file__), '..', 'backend/llmragenv','chat_history', dataset_name)
+    )
+    print(f"历史目录路径: {history_dir}")  # 调试日志
+
+    if not os.path.exists(history_dir):
+        print("目录不存在")  # 调试日志
+        return jsonify({"files": []})
+
+    # 获取该数据集下的所有 JSON 文件名（不含后缀）
+    files = [
+        os.path.splitext(name)[0]
+        for name in os.listdir(history_dir)
+        if os.path.isfile(os.path.join(history_dir, name)) and name.endswith(".json")
+    ]
+    
+    print(f"找到文件: {files}")  # 调试日志
+    return jsonify({"files": files})
+
+
+
 if __name__ == '__main__':
     # use_reloader=False 对于使用全局变量进行内存存储很重要
     app.run(host='0.0.0.0', port=5000, debug=True, use_reloader=False)

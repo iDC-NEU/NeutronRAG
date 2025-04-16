@@ -29,14 +29,11 @@ let abortController = new AbortController();
 let currentCytoscapeInstance = null;
 let currentAnswers = { query: "", vector: "", graph: "", hybrid: "" };
 const placeholderText = `<div class="placeholder-text">请选择 RAG 模式，输入内容或从历史记录中选择，然后点击应用设置。</div>`;
+let history_list = [];
 let selectedDatasetName = null;
-let isAddingNewSession = false;
 
-// --- 后端模式状态 (仅当 USE_BACKEND_HISTORY = true 时使用) ---
 let sessionsList = [];
 let currentSessionId = null;
-
-// --- 本地模拟数据 (仅当 USE_BACKEND_HISTORY = false 时使用) ---
 let historySessions = {
     "Default Session": [
         { id: 'mock1', query: 'Sample Query 1 (Mock)', answer: 'Vector answer for Sample 1', type: 'GREEN', vectorAnswer: 'Vector answer for Sample 1', graphAnswer: 'Graph answer for Sample 1', hybridAnswer: 'Hybrid answer for Sample 1', timestamp: new Date(Date.now() - 100000).toISOString() },
@@ -45,6 +42,33 @@ let historySessions = {
     "Another Session": []
 };
 let currentHistorySessionName = "Default Session";
+
+document.getElementById("read-history").addEventListener("click", function () {
+    if (!selectedDatasetName) {
+        alert("请先选择一个数据集！");
+        return;
+    }
+    
+    console.log("点击了 read-history，准备发送 selectedDatasetName:", selectedDatasetName);
+
+    fetch('/list-history', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ selectedDatasetName })
+    })
+    .then(response => response.json())
+    .then(data => {
+        history_list = data.files || [];
+        console.log("✅ history_list 已更新:", history_list);
+        currentHistorySessionName = history_list.includes(selectedDatasetName) ? selectedDatasetName : history_list[0];
+    })
+    .catch(error => {
+        console.error("❌ 获取历史失败:", error);
+    });
+});
+
 
 // --- 数据集层级结构 ---
 const datasetHierarchy = {
@@ -220,6 +244,11 @@ function handleDatasetOptionClick(event) {
     selectedDatasetName = datasetName;
     console.log("选择的数据集:", selectedDatasetName);
     applySettingsButton.disabled = false;
+
+
+
+
+    
 }
 
 // --- 历史会话管理 ---
