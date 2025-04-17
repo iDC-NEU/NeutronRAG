@@ -361,32 +361,66 @@ class Demo_chat:
 
 
     def new_history_chat(self, mode="rewrite"):
+        evidence_path = "/home/yangxb/NeutronRAG/backend/evaluator/rgb_evidence_test.json"
+        print("dataset_path:",self.dataset_path)
         with open(self.dataset_path, "r") as f:  # 读取模式改为'r'，避免覆盖原数据
             data = json.load(f)
+        # data = data[:10]
 
         # 使用 tqdm 显示进度条
-            for item in tqdm(data, desc="Processing items", unit="item"):  # 显示进度条
-                query = item["query"]
-                response_vector = self.chat_vector.web_chat(message=query, history=None)
-                response_graph = self.chat_graph.web_chat(message=query, history=None)
-                response_hybrid = self.hybrid_chat(message=query)
-                vector_retrieval_result = self.chat_vector.retrieval_result()
-                graph_retrieval_result = self.chat_graph.retrieval_result()
+        for item in tqdm(data, desc="Processing items", unit="item"):  # 显示进度条
+            query_id = item.get("id", None)
+            query = item["query"]
 
-                # 创建新的数据项
-                item_data = {
-                    "id": item.get("id", None),
-                    "query": query,
-                    "vector_response": response_vector,
-                    "graph_response": response_graph,
-                    "hybrid_response": response_hybrid,
-                    "vector_retrieval_result": vector_retrieval_result,
-                    "graph_retrieval_result": graph_retrieval_result
-                }
+            response_vector = self.chat_vector.web_chat(message=query, history=None)
+            response_graph = self.chat_graph.web_chat(message=query, history=None)
+            response_hybrid = self.hybrid_chat(message=query)
 
-                with open(self.path_name, 'a') as f: 
-                            json.dump(item_data, f, separators=(',', ':'))  # 使用 ',' 和 ':' 分隔符
-                            f.write('\n')  # 每个元素占一行
+            vector_retrieval_result = self.chat_vector.retrieval_result()
+            graph_retrieval_result = self.chat_graph.retrieval_result()
+
+            evaluation_vector = self.evaluator.evaluate_one_query(
+                                    query_id=query_id,
+                                    query=query,
+                                    retrieval_result=vector_retrieval_result,
+                                    response=response_vector,
+                                    evidence_path=evidence_path,
+                                    mode="vector"
+                                    )
+            evaluation_graph = self.evaluator.evaluate_one_query(
+                                    query_id=query_id,
+                                    query=query,
+                                    retrieval_result=graph_retrieval_result,
+                                    response=response_graph,
+                                    evidence_path=evidence_path,
+                                    mode="graph"
+                                    )
+            evaluation_hybrid = self.evaluator.evaluate_one_query(
+                                    query_id=query_id,
+                                    query=query,
+                                    retrieval_result=self.hybrid_retrieval_result,
+                                    response=response_hybrid,
+                                    evidence_path=evidence_path,
+                                    mode="vector"
+                                    )
+            # 创建新的数据项
+            item_data = {
+                "id": query_id,
+                "query": query,
+                "vector_response": response_vector,
+                "graph_response": response_graph,
+                "hybrid_response": response_hybrid,
+                "vector_retrieval_result": vector_retrieval_result,
+                "graph_retrieval_result": graph_retrieval_result,
+                "vector_evaluation": evaluation_vector,
+                "graph_evaluation": evaluation_graph,
+                "hybrid_evaluation": evaluation_hybrid
+            }
+
+            with open(self.path_name, 'a') as f: 
+                json.dump(item_data, f, separators=(',', ':'))  # 使用 ',' 和 ':' 分隔符
+                f.write('\n')  # 每个元素占一行
+                print(f"Results successfully saved to {self.path_name}")
 
 
 
@@ -560,7 +594,7 @@ if __name__ == "__main__":
     # chat.close()
     test_history_chat()
 
-    
+
     # rel_seq = "Google's nest thermostat -Is on sale for-> $90 <-Was originally priced at- Echo show 5 (third-gen))"
 
     # parts = split_relation(rel_seq)
