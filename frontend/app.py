@@ -22,6 +22,26 @@ app.secret_key = 'ac1e22dfb44b87ef38f5bf2cd1cb0c6f93bb0a67f1b2d8f7'  # 用于 fl
 CORS(app) # Enable CORS for all routes
 
 current_model = None
+def read_json_lines(file_path):
+    """
+    逐行读取 JSON 文件，并返回所有解析的记录。
+
+    :param file_path: 要读取的 JSON 文件路径
+    :return: 解析后的记录列表
+    """
+    items = []  # 用于存储所有解析的记录
+    with open(file_path, 'r', encoding='utf-8') as file:
+        for line in file:
+            try:
+                # 解析每一行 JSON
+                record = json.loads(line.strip())
+                # 将解析的记录添加到列表
+                items.append(record)
+            except json.JSONDecodeError as e:
+                # 如果遇到解析错误，输出错误信息
+                print(f"解析错误: {e} - 无法解析行: {line}")
+    
+    return items  # 返回所有解析的记录列表
 
 # --- 新增: 用于模拟会话和历史记录的内存存储 ---
 # 警告: 数据将在服务器重启时丢失! 实际应用需要数据库。
@@ -779,13 +799,13 @@ def create_session():
     print(f"(模拟) 已创建会话: {new_session}")
     return jsonify(new_session), 201
 
-@app.route('/api/sessions/<sessionId>/history', methods=['GET'])
-def get_session_history(sessionId):
-    """(模拟) 返回指定会话的历史记录。"""
-    if sessionId not in history_storage: return jsonify({"error": "会话未找到"}), 404
-    # 按时间戳降序返回 (可选)
-    session_history = sorted(history_storage[sessionId], key=lambda item: item.get('timestamp', ''), reverse=True)
-    return jsonify(session_history)
+# @app.route('/api/sessions/<sessionId>/history', methods=['GET'])
+# def get_session_history(sessionId):
+#     """(模拟) 返回指定会话的历史记录。"""
+#     if sessionId not in history_storage: return jsonify({"error": "会话未找到"}), 404
+#     # 按时间戳降序返回 (可选)
+#     session_history = sorted(history_storage[sessionId], key=lambda item: item.get('timestamp', ''), reverse=True)
+#     return jsonify(session_history)
 
 @app.route('/api/sessions/<sessionId>/history', methods=['POST'])
 def add_history_item(sessionId):
@@ -840,8 +860,50 @@ def list_history_files():
     print(f"找到文件: {files}")  # 调试日志
     return jsonify({"files": files})
 
+@app.route('/create-history-session', methods=['POST'])
+def create_history_session(): 
+    data = request.get_json()
+    session_name = data.get("sessionName")
+    dataset_name = data.get("datasetName")
+
+
+    session_file = os.path.abspath(
+        os.path.join(os.path.dirname(__file__), '..', 'backend/llmragenv','chat_history', dataset_name,f"{session_name}.json")
+    )
+    try:
+        os.makedirs(os.path.dirname(session_file), exist_ok=True)
+        with open(session_file, 'w', encoding='utf-8') as f:
+            f.close()
+        return jsonify({"success": True, "sessionName": session_name, "path": session_file})
+    except Exception as e:
+        # 发生错误时，返回失败响应及错误信息
+        return jsonify({"success": False, "message": str(e)}), 500
+
+
+
+
+    
+@app.route('/api/sessions/history', methods=['GET'])
+def get_session_history():
+    # 获取查询参数 dataset 和 session
+    dataset_name = request.args.get('dataset')
+    session_name = request.args.get('session')
+    if not dataset_name or not session_name:
+        return jsonify({"success": False, "message": "数据集名称或会话名称未提供"}), 400
+    session_file = os.path.abspath(
+        os.path.join(os.path.dirname(__file__), '..', 'backend/llmragenv','chat_history', dataset_name,f"{session_name}.json")
+    )
+    if not os.path.exists(session_file):
+        return jsonify({"success": False, "message": f"历史记录文件 {session_name}.json 不存在"}), 404
+    try:
+        history_data = read_json_lines(session_file) 
+        return jsonify(history_data)
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e)}), 500
+
+
 
 
 if __name__ == '__main__':
     # use_reloader=False 对于使用全局变量进行内存存储很重要
-    app.run(host='0.0.0.0', port=5000, debug=True, use_reloader=False)
+    app.run(host='0.0.0.0', port=5001, debug=True, use_reloader=False)

@@ -1,6 +1,6 @@
 // --- 全局配置 ---
 // !! 切换模式: true = 使用后端 API 获取/保存会话历史, false = 使用本地对象模拟
-const USE_BACKEND_HISTORY = false;
+const USE_BACKEND_HISTORY = true;
 
 // --- 常量与全局变量 ---
 const sendButton = document.getElementById("send-button");
@@ -33,42 +33,15 @@ let history_list = [];
 let selectedDatasetName = null;
 
 let sessionsList = [];
-let currentSessionId = null;
-let historySessions = {
-    "Default Session": [
-        { id: 'mock1', query: 'Sample Query 1 (Mock)', answer: 'Vector answer for Sample 1', type: 'GREEN', vectorAnswer: 'Vector answer for Sample 1', graphAnswer: 'Graph answer for Sample 1', hybridAnswer: 'Hybrid answer for Sample 1', timestamp: new Date(Date.now() - 100000).toISOString() },
-        { id: 'mock2', query: 'Sample Query 2 (Mock Error)', answer: 'Vector error', type: 'RED', vectorAnswer: 'Vector error', graphAnswer: 'Graph error', hybridAnswer: 'Hybrid error', timestamp: new Date(Date.now() - 50000).toISOString() }
-    ],
-    "Another Session": []
-};
-let currentHistorySessionName = "Default Session";
-
-document.getElementById("read-history").addEventListener("click", function () {
-    if (!selectedDatasetName) {
-        alert("请先选择一个数据集！");
-        return;
-    }
-    
-    console.log("点击了 read-history，准备发送 selectedDatasetName:", selectedDatasetName);
-
-    fetch('/list-history', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ selectedDatasetName })
-    })
-    .then(response => response.json())
-    .then(data => {
-        history_list = data.files || [];
-        console.log("✅ history_list 已更新:", history_list);
-        currentHistorySessionName = history_list.includes(selectedDatasetName) ? selectedDatasetName : history_list[0];
-    })
-    .catch(error => {
-        console.error("❌ 获取历史失败:", error);
-    });
-});
-
+let currentSession = null;
+// let historySessions = {
+//     "Default Session": [
+//         { id: 'mock1', query: 'Sample Query 1 (Mock)', answer: 'Vector answer for Sample 1', type: 'GREEN', vectorAnswer: 'Vector answer for Sample 1', graphAnswer: 'Graph answer for Sample 1', hybridAnswer: 'Hybrid answer for Sample 1', timestamp: new Date(Date.now() - 100000).toISOString() },
+//         { id: 'mock2', query: 'Sample Query 2 (Mock Error)', answer: 'Vector error', type: 'RED', vectorAnswer: 'Vector error', graphAnswer: 'Graph error', hybridAnswer: 'Hybrid error', timestamp: new Date(Date.now() - 50000).toISOString() }
+//     ],
+//     "Another Session": []
+// };
+let historySessions = {}
 
 // --- 数据集层级结构 ---
 const datasetHierarchy = {
@@ -227,7 +200,7 @@ function updateDatasetSelection() {
         datasets = []; selectedDatasetsList.innerHTML = '<li>选择出错。</li>'; return;
     }
     if (Array.isArray(datasets) && datasets.length > 0) {
-        selectedDatasetsList.innerHTML = datasets.map(ds => `<li class="dataset-option" data-dataset-name="${ds}">${ds}</li>`).join('');
+        selectedDatasetsList.innerHTML = datasets.map(ds => `<li class="dataset-option" data-dataset-name="${ds}" id="${ds}">${ds}</li>`).join('');
         selectedDatasetsList.querySelectorAll('.dataset-option').forEach(item => item.addEventListener('click', handleDatasetOptionClick));
         selectedDatasetsList.insertAdjacentHTML('afterbegin', '<li>请点击选择一个数据集:</li>');
     } else {
@@ -243,12 +216,44 @@ function handleDatasetOptionClick(event) {
     li.classList.add('selected-dataset');
     selectedDatasetName = datasetName;
     console.log("选择的数据集:", selectedDatasetName);
-    applySettingsButton.disabled = false;
+    applySettingsButton.disabled = false;    
+    fetch('/list-history', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ selectedDatasetName })
+    })
+    .then(response => response.json())
+    .then(data => {
+        sessionsList = data.files || [];
+        console.log("✅ sessionsList 已更新:", sessionsList);
 
+        if (sessionsList.length === 0) {
+            alert("未找到历史记录文件");
+        }
 
+        // 初始化 historySessions，只设为 { 文件名: [] }
+        historySessions = {};
+        sessionsList.forEach(name => {
+            historySessions[name] = [];
+        });
 
+        // 设置当前会话名（优先使用当前数据集名）
+        currentHistorySessionName = sessionsList.includes(selectedDatasetName)
+            ? selectedDatasetName
+            : sessionsList[0];
 
-    
+        console.log("📘 初始化完成的 historySessions:", historySessions);
+        console.log("📌 当前会话名称:", currentHistorySessionName);
+
+        // 可选：自动更新 UI
+        populateSessionDropdown();
+        displaySessionHistory();
+    })
+    .catch(error => {
+        console.error("❌ 获取历史列表失败:", error);
+    });
 }
 
 // --- 历史会话管理 ---
@@ -256,7 +261,7 @@ function handleDatasetOptionClick(event) {
 async function initializeHistory() {
     if (USE_BACKEND_HISTORY) {
         console.log("从后端初始化历史记录...");
-        await fetchSessionsAPI();
+        // await fetchSessionsAPI();
         await populateSessionDropdown();
         await displaySessionHistory();
     } else {
@@ -270,6 +275,7 @@ async function fetchSessionsAPI() {
     // #backend-integration: GET /api/sessions
     console.log("(API 模式) 正在获取会话列表...");
     try {
+        //之前写的获取函数
         // const response = await fetch('/api/sessions'); // 实际 Fetch
         // 模拟返回
         const response = { ok: true, json: async () => ([{id: 'backend-uuid-1', name: 'Backend Session 1'}, {id: 'backend-uuid-2', name: 'Backend Session 2'}]) };
@@ -290,12 +296,21 @@ function populateSessionDropdown() {
         if (sessionsList.length === 0) { historySessionSelect.innerHTML = '<option value="">无可用会话</option>'; return; }
         sessionsList.forEach(session => {
             const option = document.createElement('option');
-            option.value = session.id; option.textContent = session.name; historySessionSelect.appendChild(option);
+            option.value = session; option.textContent = session; historySessionSelect.appendChild(option);
         });
-        if (currentSessionId && sessionsList.some(s => s.id === currentSessionId)) { historySessionSelect.value = currentSessionId; }
-        else if (sessionsList.length > 0) { currentSessionId = sessionsList[0].id; historySessionSelect.value = currentSessionId; }
-        else { currentSessionId = null; }
-        console.log("(API 模式) 下拉菜单已填充，当前会话 ID:", currentSessionId);
+        if (currentSession && sessionsList.includes(currentSession)) {
+            // 如果 currentSession 存在并且在 sessionsList 中，设置为选中项
+            historySessionSelect.value = currentSession;
+        } else if (sessionsList.length > 0) {
+            // 如果 currentSession 不存在或者不在 sessionsList 中，默认选择第一个会话
+            currentSession = sessionsList[0];
+            historySessionSelect.value = currentSession;
+        } else {
+            // 如果 sessionsList 为空，清空 currentSession
+            currentSession = null;
+        }
+        
+        console.log("(API 模式) 下拉菜单已填充，当前会话:", currentSession);
     } else {
         console.log("(本地模式) 正在根据本地数据填充下拉菜单");
         const sessionNames = Object.keys(historySessions);
@@ -314,66 +329,157 @@ function populateSessionDropdown() {
 async function displaySessionHistory() {
     questionList.innerHTML = '<li class="no-history-item">正在加载历史记录...</li>';
     let items = [];
+
     if (USE_BACKEND_HISTORY) {
-        const sessionId = currentSessionId;
-        if (!sessionId) { questionList.innerHTML = '<li class="no-history-item">请选择一个会话。</li>'; return; }
-        console.log(`(API 模式) 正在为会话获取历史记录: ${sessionId}`);
-        // #backend-integration: GET /api/sessions/${sessionId}/history
-        try {
-             // const response = await fetch(`/api/sessions/${sessionId}/history`); // 实际 Fetch
-             // 模拟返回
-             const mockBackendHistory = [ {id: `item-be-1-${sessionId}`, query: `Backend Query 1 for ${sessionId}`, answer: "Backend Answer 1", type:"GREEN", timestamp: new Date().toISOString()} ];
-             const response = { ok: true, json: async () => mockBackendHistory };
-             if (!response.ok) throw new Error(`获取失败: ${response.status}`);
-             items = await response.json();
-             console.log(`(API 模式) 获取到 ${items.length} 条历史记录。`);
-        } catch (error) {
-             console.error(`(API 模式) 获取会话 ${sessionId} 的历史记录时出错:`, error);
-             questionList.innerHTML = `<li class="no-history-item">加载历史记录出错: ${error.message}</li>`; return;
+        const session = currentSession;
+        const datasetName = selectedDatasetName;
+
+        if (!session || !datasetName) {
+            questionList.innerHTML = '<li class="no-history-item">请选择一个会话。</li>';
+            return;
         }
+
+        console.log(`(API 模式) 正在为会话获取历史记录: ${session}`);
+
+        try {
+            // 发起后端请求
+            const response = await fetch(`/api/sessions/history?dataset=${encodeURIComponent(datasetName)}&session=${encodeURIComponent(session)}`, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            if (!response.ok) throw new Error(`获取失败: ${response.status}`);
+
+            items = await response.json();
+            console.log(`(API 模式) 获取到 ${items.length} 条历史记录。`);
+
+        } catch (error) {
+            console.error(`(API 模式) 获取会话 ${session} 的历史记录时出错:`, error);
+            questionList.innerHTML = `<li class="no-history-item">加载历史记录出错: ${error.message}</li>`;
+            return;
+        }
+
     } else {
+        // 本地模式
         const sessionName = currentHistorySessionName;
-        if (!sessionName || !historySessions[sessionName]) { questionList.innerHTML = '<li class="no-history-item">请选择一个有效的会话。</li>'; return; }
+        if (!sessionName || !historySessions[sessionName]) {
+            questionList.innerHTML = '<li class="no-history-item">请选择一个有效的会话。</li>';
+            return;
+        }
+
         console.log(`(本地模式) 正在显示本地会话的历史记录: ${sessionName}`);
         items = (historySessions[sessionName] || []).slice().sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
         console.log(`(本地模式) 找到 ${items.length} 条历史记录。`);
     }
 
+    // 清空列表准备填充历史记录
     questionList.innerHTML = '';
-    if (items.length === 0) { questionList.innerHTML = '<li class="no-history-item">此会话尚无历史记录。</li>'; return; }
+
+    if (items.length === 0) {
+        questionList.innerHTML = '<li class="no-history-item">此会话尚无历史记录。</li>';
+        return;
+    }
+
+    // 渲染每条历史记录
     items.forEach(item => {
-        const div = document.createElement('div'); div.classList.add('question-item'); div.id = `history-${item.id}`; div.dataset.itemId = item.id;
-        let backgroundColor = '#f0f0f0'; switch (item.type?.toUpperCase()) { case 'GREEN': backgroundColor = '#d9f7be'; break; case 'RED': backgroundColor = '#ffccc7'; break; case 'YELLOW': backgroundColor = '#fff2e8'; break; } div.style.backgroundColor = backgroundColor;
+        const div = document.createElement('div');
+        div.classList.add('question-item');
+        div.id = `history-${item.id}`;
+        div.dataset.itemId = item.id;
+
+        // 设置背景颜色
+        let backgroundColor = '#f0f0f0';
+        switch (item.type?.toUpperCase()) {
+            case 'GREEN': backgroundColor = '#d9f7be'; break;
+            case 'RED': backgroundColor = '#ffccc7'; break;
+            case 'YELLOW': backgroundColor = '#fff2e8'; break;
+        }
+        div.style.backgroundColor = backgroundColor;
+
         const answerSnippet = item.answer ? item.answer.substring(0, 30) + '...' : '';
-        div.innerHTML = `<p>ID: ${item.id}</p><p>Query: ${item.query || 'N/A'}</p>${answerSnippet ? `<p>Ans: ${answerSnippet}</p>` : ''}`;
-        div.addEventListener('click', handleHistoryItemClick); questionList.appendChild(div);
+        div.innerHTML = `
+            <p>ID: ${item.id}</p>
+            <p>Query: ${item.query || 'N/A'}</p>
+            ${answerSnippet ? `<p>Ans: ${answerSnippet}</p>` : ''}
+        `;
+
+        div.addEventListener('click', handleHistoryItemClick);
+        questionList.appendChild(div);
     });
 }
 
 async function handleConfirmNewSession() {
     const name = newSessionNameInput.value.trim();
-    if (name === "") { console.warn("会话名称不能为空。"); newSessionNameInput.focus(); return; }
+
+    // 检查会话名称是否为空
+    if (name === "") {
+        console.warn("会话名称不能为空。");
+        newSessionNameInput.focus();
+        return;
+    }
+
+    // 隐藏输入框
     hideNewSessionInput();
+
+    // 如果是使用后端创建会话
     if (USE_BACKEND_HISTORY) {
         console.log(`(API 模式) 尝试通过 API 创建新会话: ${name}`);
-        // #backend-integration: POST /api/sessions
-         try {
-             // const response = await fetch('/api/sessions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: name }) }); // 实际 Fetch
-             // 模拟成功
-             const newSession = { id: `backend-uuid-${Date.now()}`, name: name };
-             const response = { ok: true, json: async () => newSession };
-             if (!response.ok) throw new Error(`创建失败: ${response.status}`);
-             const createdSession = await response.json();
-             console.log("(API 模式) 新会话已创建:", createdSession);
-             await fetchSessionsAPI(); currentSessionId = createdSession.id; await populateSessionDropdown(); await displaySessionHistory();
-         } catch (error) { console.error("(API 模式) 创建新会话时出错:", error); alert(`通过 API 创建会话失败: ${error.message}`); }
+
+        try {
+            // 实际请求后端创建会话
+            const response = await fetch('/create-history-session', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    sessionName: name,
+                    datasetName: selectedDatasetName
+                })
+            });
+
+            // 检查请求是否成功
+            if (!response.ok) throw new Error(`创建失败: ${response.status}`);
+
+            // 解析响应
+            const createdSession = await response.json();
+            console.log("(API 模式) 新会话已创建:", createdSession);
+
+            // 获取并刷新会话数据
+            // await fetchSessionsAPI();
+            currentHistorySessionName = createdSession.name;
+
+            // 更新 UI
+            await populateSessionDropdown();
+            await displaySessionHistory();
+        } catch (error) {
+            console.error("(API 模式) 创建新会话时出错:", error);
+            alert(`通过 API 创建会话失败: ${error.message}`);
+        }
+
     } else {
+        // 如果是本地模式
         console.log(`(本地模式) 尝试创建本地会话: ${name}`);
-        let newName = name; let counter = 1; const baseName = newName;
-        while (historySessions.hasOwnProperty(newName)) { newName = `${baseName} ${counter}`; counter++; }
+
+        let newName = name;
+        let counter = 1;
+        const baseName = newName;
+
+        // 确保会话名称唯一
+        while (historySessions.hasOwnProperty(newName)) {
+            newName = `${baseName} ${counter}`;
+            counter++;
+        }
+
         console.log(`(本地模式) 创建本地会话: ${newName}`);
-        historySessions[newName] = []; currentHistorySessionName = newName;
-        populateSessionDropdown(); displaySessionHistory();
+
+        // 在本地添加新会话
+        historySessions[newName] = [];
+        currentHistorySessionName = newName;
+
+        // 更新 UI
+        populateSessionDropdown();
+        displaySessionHistory();
     }
 }
 
@@ -383,14 +489,14 @@ async function addInteractionToHistory(query, answer, type = 'INFO', details = {
         details: { vectorAnswer: details.vectorAnswer || '', graphAnswer: details.graphAnswer || '', hybridAnswer: details.hybridAnswer || '' }
     };
     if (USE_BACKEND_HISTORY) {
-        const sessionId = currentSessionId;
-        if (!sessionId) { console.error("(API 模式) 无法添加到历史: 未选择会话。"); return null; }
-        console.log(`(API 模式) 正在添加交互到会话 ${sessionId}`);
+        const session = currentSession;
+        if (!session) { console.error("(API 模式) 无法添加到历史: 未选择会话。"); return null; }
+        console.log(`(API 模式) 正在添加交互到会话 ${session}`);
         // #backend-integration: POST /api/sessions/${sessionId}/history
          try {
              // const response = await fetch(`/api/sessions/${sessionId}/history`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(historyItemData) }); // 实际 Fetch
              // 模拟成功
-             const savedItem = { ...historyItemData, id: `item-be-${Date.now()}-${sessionId}`, timestamp: new Date().toISOString() };
+             const savedItem = { ...historyItemData, id: `item-be-${Date.now()}-${session}`, timestamp: new Date().toISOString() };
              const response = { ok: true, json: async () => savedItem };
              if (!response.ok) throw new Error(`保存失败: ${response.status}`);
              const returnedItem = await response.json();
@@ -412,8 +518,51 @@ async function addInteractionToHistory(query, answer, type = 'INFO', details = {
     }
 }
 
+newSessionNameInput.addEventListener('keydown', function (event) {
+    if (event.key === 'Enter') {
+        const sessionName = newSessionNameInput.value.trim();
+
+        if (!sessionName) {
+            alert("请输入会话名称！");
+            return;
+        }
+
+        // 发起创建新历史文件请求
+        fetch('/create-history-session', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ sessionName, datasetName: selectedDatasetName })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                console.log(`✅ 已创建新历史会话文件: ${sessionName}`);
+
+                // 更新本地 session 结构
+                historySessions[sessionName] = [];
+                history_list.push(sessionName);
+                currentHistorySessionName = sessionName;
+
+                // 更新 UI
+                populateSessionDropdown();
+                displaySessionHistory();
+                hideNewSessionInput();
+            } else {
+                alert("❌ 创建失败：" + data.message);
+            }
+        })
+        .catch(err => {
+            console.error("❌ 创建会话时出错:", err);
+            alert("创建失败，请稍后重试！");
+        });
+    }
+});
+
+
 function showNewSessionInput() {
-    if (isAddingNewSession) return;
+    // if (isAddingNewSession) return;
     isAddingNewSession = true;
     newHistorySessionButton.style.display = 'none';
     newSessionInputContainer.style.display = 'inline-flex';
@@ -482,20 +631,7 @@ applySettingsButton.addEventListener("click", async () => {
     //         body: JSON.stringify(postData)
     //     }).catch(error => {
     //         console.error("请求失败:", error);
-    //     });
-    
-    //     console.log("数据集加载请求已发送（POST），不等待结果。");
-    
-    // } catch (error) {
-    //     console.error("构造请求失败:", error);
-    //     alert("发生错误，无法发送数据集请求。");
-    // } finally {
-    //     applySettingsButton.disabled = false; 
-    //     applySettingsButton.textContent = "应用设置"; 
-    // }
-
-
-    
+    //     });    
     applySettingsButton.disabled = true; 
     applySettingsButton.textContent = "应用中..."; 
     adviceContent.innerHTML = "正在加载建议...";
@@ -631,7 +767,7 @@ dim2Select.addEventListener('change', updateDatasetSelection);
 dim3Select.addEventListener('change', updateDatasetSelection);
 historySessionSelect.addEventListener('change', (event) => {
     const selectedValue = event.target.value;
-    if (USE_BACKEND_HISTORY) { currentSessionId = selectedValue; console.log("(API 模式) 会话已更改为 ID:", currentSessionId); }
+    if (USE_BACKEND_HISTORY) { currentSession = selectedValue; console.log("(API 模式) 会话已更改为 ID:", currentSession); }
     else { currentHistorySessionName = selectedValue; console.log("(本地模式) 会话已更改为名称:", currentHistorySessionName); }
     displaySessionHistory();
 });
