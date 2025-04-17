@@ -252,10 +252,44 @@ def statistic_vector_retrieval(dataset):
     print("recall:",recall)
     return precision,relevance,recall
 
+#临时模拟数据统计
+def statistic_hybrid_generation(dataset):
+    hybrid_file_path = "/home/lipz/NeutronRAG/NeutronRAG/backend/evaluator/simulated_data.json"
+    sum_precision = 0.0
+    sum_relevance = 0.0
+    sum_recall = 0.0
+    sum_exact_match = 0.0
+    sum_faithfulness = 0.0
+    count = 0
 
-def statistic_hybrid_generation():
+    
+    with open(hybrid_file_path, 'r', encoding='utf-8') as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
 
-    return
+            data = json.loads(line)
+
+            sum_precision += data['retrieval_metric']['precision']
+            sum_relevance += data['retrieval_metric']['relevance']
+            sum_recall += data['retrieval_metric']['recall']
+            sum_exact_match += data['generation_metric']['exact_match']
+            sum_faithfulness += data['generation_metric']['faithfulness']
+            count += 1
+
+                
+
+    if count == 0:
+        return 0.0, 0.0, 0.0, 0.0, 0.0
+
+    precision = sum_precision / count
+    faithfulness = sum_faithfulness / count
+    accuracy = sum_exact_match / count 
+    relevance = sum_relevance / count
+    recall = sum_recall / count
+
+    return precision, faithfulness, accuracy, relevance, recall
 
 
 
