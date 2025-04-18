@@ -6,12 +6,23 @@ from datetime import datetime, timezone
 from config.config import Config
 from flask import Flask, Response, request, jsonify, render_template, session
 import os
+import sys
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 from flask_cors import CORS
 from zhipuai import ZhipuAI
 from user import User
-from llmragenv.llmrag_env import LLMRAGEnv
+current_dir = os.getcwd()
+
+# 获取当前工作目录的上级目录
+parent_dir = os.path.dirname(current_dir)
+
+# 拼接出 'backend' 文件夹的路径
+backend_dir = os.path.join(parent_dir, 'backend')
+
+# 将 'backend' 目录添加到 sys.path 中
+sys.path.append(backend_dir)
+from  llmragenv.llmrag_env import LLMRAGEnv
 from llmragenv.demo_chat import *
 from evaluator import simulate
 from llmragenv.demo_chat import Demo_chat
