@@ -2,7 +2,7 @@
 Author: lpz 1565561624@qq.com
 Date: 2025-03-19 20:28:13
 LastEditors: lpz 1565561624@qq.com
-LastEditTime: 2025-04-17 23:22:59
+LastEditTime: 2025-04-18 16:49:01
 FilePath: /lipz/NeutronRAG/NeutronRAG/backend/llmragenv/demo_chat.py
 Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
 '''
@@ -230,6 +230,7 @@ class Demo_chat:
         "llama": "http://localhost:11434/v1",  # 本地 Ollama
     }
 
+
     def __init__(self,
                  model_name,
                  dataset_path,
@@ -272,7 +273,15 @@ class Demo_chat:
         self.strategy = strategy
         self.api_key = api_key
         #自动匹配 URL
-        self.url = self.Model_Url_Mapping.get(model_name, "https://api.deepseek.com")  # 若没有匹配上的模型，则默认使用 Ollama
+        self.url = Demo_chat.get_model_url(model_name=model_name)
+        self.backend = "openai"
+        if "llama" in model_name.lower():
+            self.backend = "llama_index"
+        
+
+            
+        
+          # 若没有匹配上的模型，则默认使用 Ollama
         print("model_name",model_name)
         self.llm = self.load_llm(self.model_name,self.url,self.api_key)
         self.vectordb = MilvusDB(dataset_name, 1024, overwrite=False, store=True,retriever=True)
@@ -291,13 +300,24 @@ class Demo_chat:
         
         self.evaluator = Evaluator(data_name=dataset_name,mode=strategy)
 
+    @staticmethod
+    def get_model_url(model_name):
+        # 将 model_name 转换为小写，查找映射表的前缀
+        model_name = model_name.lower()
 
+        # 查找前缀匹配的 URL
+        for key in Demo_chat.Model_Url_Mapping:
+            if model_name.startswith(key):  # 如果 model_name 以映射表中的 key 为前缀
+                return Demo_chat.Model_Url_Mapping[key]
         
+        # 如果没有找到对应的前缀，返回默认的 URL
+        return "http://localhost:11434/v1"  # 默认 URL
+
 
     def load_llm(self, model_name, url, api_key):
         print(model_name,url)
         try:
-            llm = ClientFactory(model_name, url, api_key).get_client()
+            llm = ClientFactory(model_name, url, api_key,self.backend).get_client()
             print("成功加载模型",llm)
             return llm
         except Exception as e:
