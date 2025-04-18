@@ -313,14 +313,58 @@ body {
     height: 100%;
 }
 
-#current-answer-display {
-    width: 100%;
+#current-answer-content {
     display: flex;
     flex-direction: column;
-    min-height: 150px;
+    gap: 15px;
+    padding: 15px;
     flex-grow: 1;
+    overflow: auto;
     height: 100%;
+    min-height: 0;
 }
+
+.chat-message {
+    display: flex; 
+    align-items: flex-end;
+    max-width: 85%;
+    gap: 10px;
+}
+
+.user-message {
+    align-self: flex-end;
+    flex-direction: row-reverse;
+}
+
+.model-message {
+    align-self: flex-start;
+    flex-direction: row; 
+}
+
+.message-bubble {
+    background-color: #e9e9f5;
+    padding: 10px 15px;
+    border-radius: 15px;
+    font-size: 0.9em;
+    line-height: 1.5;
+    color: #333;
+    word-wrap: break-word; 
+}
+.user-message .message-bubble {
+    border-bottom-right-radius: 5px; 
+}
+
+.model-message .message-bubble {
+    border-bottom-left-radius: 5px;
+}
+
+.message-icon {
+    width: 32px;
+    height: 32px;
+    flex-shrink: 0;
+    object-fit: cover;
+}
+
 
 #current-answer-display .content {
     padding: 15px;
