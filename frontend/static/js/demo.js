@@ -34,6 +34,9 @@ let selectedDatasetName = null;
 
 let sessionsList = [];
 let currentSession = null;
+let current_vector_response= null
+let current_graph_response= null
+let current_hybrid_response= null
 // let historySessions = {
 //     "Default Session": [
 //         { id: 'mock1', query: 'Sample Query 1 (Mock)', answer: 'Vector answer for Sample 1', type: 'GREEN', vectorAnswer: 'Vector answer for Sample 1', graphAnswer: 'Graph answer for Sample 1', hybridAnswer: 'Hybrid answer for Sample 1', timestamp: new Date(Date.now() - 100000).toISOString() },
@@ -399,9 +402,15 @@ async function displaySessionHistory() {
         div.style.backgroundColor = backgroundColor;
 
         const answerSnippet = item.answer ? item.answer.substring(0, 30) + '...' : '';
+        current_vector_response = item.vector_response
+        current_graph_response = item.graph_response
+        current_hybrid_response = item.hybrid_response
         div.innerHTML = `
             <p>ID: ${item.id}</p>
             <p>Query: ${item.query || 'N/A'}</p>
+            <p>V::${item.vector_response}</p>
+            <p>G:${item.graph_response}</p>
+            <p>H:${item.hybrid_response}</p>
             ${answerSnippet ? `<p>Ans: ${answerSnippet}</p>` : ''}
         `;
 
@@ -695,7 +704,7 @@ async function handleHistoryItemClick(event) {
          queryText = div.querySelector('p:nth-of-type(2)')?.textContent.replace('Query: ', '') || 'Loading...';
          // #backend-integration: Optionally fetch full item details from backend if needed
          // For now, assume we only have ID and query from the list item
-         clickedItemData = { id: itemId, query: queryText }; // Minimal data
+         clickedItemData = { id: itemId, query: queryText,vector_response:  current_vector_response,graph_response:  current_graph_response,hybrid_response:  current_hybrid_response}; // Minimal data
          console.log(`(API 模式) 历史项被点击: ID ${itemId}`);
      } else {
          const sessionName = currentHistorySessionName;
@@ -715,21 +724,165 @@ async function handleHistoryItemClick(event) {
      // #backend-integration: GET /get-vector/${itemId} 和 GET /get-graph/${itemId}
      // Backend needs to handle UUIDs if USE_BACKEND_HISTORY=true, or mock/local IDs if false
      let vectorResponse, graphResponse;
-     try { console.log(`正在为项 ID 获取细节: ${itemId}`); [vectorResponse, graphResponse] = await Promise.all([ fetch(`/get-vector/${itemId}`), fetch(`/get-graph/${itemId}`) ]);
-         if (vectorResponse.ok) { const d = await vectorResponse.json(); if (d?.chunks) { vectorContent.innerHTML = d.chunks.map((c, i) => `<div class="retrieval-result-item"><p><b>Chunk ${i + 1}:</b> ${c.text || 'N/A'}</p></div>`).join(''); } else { vectorContent.innerHTML = '<p>未找到向量块。</p>'; } } else { const t = await vectorResponse.text(); vectorContent.innerHTML = `<p>向量错误 ${vectorResponse.status}: ${t}</p>`; console.error(`向量 Fetch 失败: ${t}`);}
+     try { console.log(`正在为项 ID 获取细节: ${itemId}`); [vectorResponse, graphResponse] = await Promise.all([ fetch(`/get-vector/${itemId}?sessionName=${encodeURIComponent(currentSession)}&datasetName=${encodeURIComponent(selectedDatasetName)}`), fetch(`/get-graph/${itemId}?sessionName=${encodeURIComponent(currentSession)}&datasetName=${encodeURIComponent(selectedDatasetName)}`) ]);
+        if (vectorResponse.ok) {
+            const d = await vectorResponse.json(); // 解析返回的 JSON 数据
+            if (d?.chunks && Array.isArray(d.chunks)) {
+                // 如果 chunks 存在并且是一个数组，渲染每个 chunk
+                vectorContent.innerHTML = d.chunks.map((c, i) => {
+                    return `<div class="retrieval-result-item">
+                                <p><b>Chunk ${i + 1}:</b> ${c || 'N/A'}</p>
+                            </div>`;
+                }).join('');  // 拼接成一个字符串并设置为 innerHTML
+            } else {
+                vectorContent.innerHTML = '<p>未找到向量块。</p>';
+            }
+        } else {
+            // 如果请求失败，显示错误信息
+            const t = await vectorResponse.text();
+            vectorContent.innerHTML = `<p>向量错误 ${vectorResponse.status}: ${t}</p>`;
+            console.error(`向量 Fetch 失败: ${t}`);
+        }
          if (graphResponse.ok) { const d = await graphResponse.json(); if (d?.nodes || d?.edges) { renderCytoscapeGraph(d); } else { cyGraphDiv.innerHTML = '<p>未找到图谱数据。</p>'; } } else { const t = await graphResponse.text(); cyGraphDiv.innerHTML = `<p>图谱错误 ${graphResponse.status}: ${t}</p>`; console.error(`图谱 Fetch 失败: ${t}`);}
      } catch (error) { console.error(`为项 ${itemId} 获取细节时出错:`, error); if (!vectorResponse?.ok) vectorContent.innerHTML = `<p>加载向量细节失败。 ${error.message}</p>`; if (!graphResponse?.ok) cyGraphDiv.innerHTML = `<p>加载图谱细节失败。 ${error.message}</p>`; }
 }
 
 function renderCytoscapeGraph(graphData) {
-    let cyTargetDiv = document.getElementById('cy'); if (!cyTargetDiv) { console.error("Cytoscape 容器 'cy' 在 DOM 中未找到。"); cyContainer.innerHTML = ''; cyTargetDiv = document.createElement('div'); cyTargetDiv.id = 'cy'; cyContainer.appendChild(cyTargetDiv); } else { cyTargetDiv.innerHTML = ''; } if (currentCytoscapeInstance) { currentCytoscapeInstance.destroy(); currentCytoscapeInstance = null; } try { currentCytoscapeInstance = cytoscape({ container: cyTargetDiv, elements: { nodes: graphData.nodes || [], edges: graphData.edges || [] }, style: [ { selector: 'node', style: { 'background-color': 'data(color, "#888")', 'label': 'data(label, id)', 'width': 50, 'height': 50, 'font-size': '10px', 'text-valign': 'center', 'text-halign': 'center', 'color': '#000', 'text-outline-color': '#fff', 'text-outline-width': 1 } }, { selector: 'edge', style: { 'line-color': 'data(color, "#ccc")', 'target-arrow-color': 'data(color, "#ccc")', 'curve-style': 'bezier', 'target-arrow-shape': 'triangle', 'label': 'data(label)', 'width': 2 , 'font-size': '8px', 'text-rotation': 'autorotate', 'text-margin-y': -5, 'color': '#000', 'text-background-color': '#fff', 'text-background-opacity': 0.7, 'text-background-padding': '1px'} }, { selector: '.highlighted-node', style: { 'background-color': '#FF5733', 'border-color': '#E84A27', 'border-width': 3, 'width': 60, 'height': 60, 'z-index': 10, 'shadow-blur': 10, 'shadow-color': '#FF5733', 'shadow-opacity': 0.8 } }, { selector: '.highlighted-edge', style: { 'line-color': '#FF5733', 'target-arrow-color': '#FF5733', 'width': 4, 'z-index': 9, 'shadow-blur': 5, 'shadow-color': '#FF5733', 'shadow-opacity': 0.6 } } ], layout: { name: 'cose', fit: true, padding: 30, animate: true, animationDuration: 500, nodeRepulsion: 400000, idealEdgeLength: 100, nodeOverlap: 20 } }); if (graphData['highlighted-node']?.forEach) { graphData['highlighted-node'].forEach(n => n?.data?.id && currentCytoscapeInstance.getElementById(n.data.id).addClass('highlighted-node')); } if (graphData['highlighted-edge']?.forEach) { graphData['highlighted-edge'].forEach(e => e?.data?.id && currentCytoscapeInstance.getElementById(e.data.id).addClass('highlighted-edge')); } currentCytoscapeInstance.ready(() => { currentCytoscapeInstance.fit(null, 30); }); console.log("Cytoscape 图谱已渲染。"); } catch (error) { console.error("Cytoscape 渲染错误:", error); cyTargetDiv.innerHTML = `<p>渲染图谱时出错: ${error.message}</p>`; currentCytoscapeInstance = null; }
+    console.log("开始渲染图数据",graphData)
+    let cyTargetDiv = document.getElementById('cy');
+if (!cyTargetDiv) {
+    console.error("Cytoscape 容器 'cy' 在 DOM 中未找到。");
+    cyContainer.innerHTML = '';
+    cyTargetDiv = document.createElement('div');
+    cyTargetDiv.id = 'cy';
+    cyContainer.appendChild(cyTargetDiv);
+} else {
+    cyTargetDiv.innerHTML = '';  // 清空之前的内容
+}
+
+if (currentCytoscapeInstance) {
+    currentCytoscapeInstance.destroy();  // 销毁现有实例
+    currentCytoscapeInstance = null;
+}
+
+try {
+    // 渲染 Cytoscape 实例
+    currentCytoscapeInstance = cytoscape({
+        container: cyTargetDiv,
+        elements: {
+            nodes: graphData.nodes || [],
+            edges: graphData.edges || []
+        },
+        style: [
+            {
+                selector: 'node',
+                style: {
+                    'background-color': 'data(color)',
+                    'label': 'data(label)',
+                    'width': 50,
+                    'height': 50,
+                    'font-size': '10px',
+                    'text-valign': 'center',
+                    'text-halign': 'center',
+                    'color': '#000',
+                    'text-outline-color': '#fff',
+                    'text-outline-width': 1
+                }
+            },
+            {
+                selector: 'edge',
+                style: {
+                    'line-color': 'data(color)',
+                    'target-arrow-color': 'data(color)',
+                    'curve-style': 'bezier',
+                    'target-arrow-shape': 'triangle',
+                    'label': 'data(label)',
+                    'width': 2,
+                    'font-size': '8px',
+                    'text-rotation': 'autorotate',
+                    'text-margin-y': -5,
+                    'color': '#000',
+                    'text-background-color': '#fff',
+                    'text-background-opacity': 0.7,
+                    'text-background-padding': '1px'
+                }
+            },
+            {
+                selector: '.highlighted-node',
+                style: {
+                    'background-color': '#FF5733',
+                    'border-color': '#E84A27',
+                    'border-width': 3,
+                    'width': 60,
+                    'height': 60,
+                    'z-index': 10,
+                    'shadow-blur': 10,
+                    'shadow-color': '#FF5733',
+                    'shadow-opacity': 0.8
+                }
+            },
+            {
+                selector: '.highlighted-edge',
+                style: {
+                    'line-color': '#FF5733',
+                    'target-arrow-color': '#FF5733',
+                    'width': 4,
+                    'z-index': 9,
+                    'shadow-blur': 5,
+                    'shadow-color': '#FF5733',
+                    'shadow-opacity': 0.6
+                }
+            }
+        ],
+        layout: {
+            name: 'cose',  // 选择图的布局
+            fit: true,
+            padding: 30,
+            animate: true,
+            animationDuration: 500,
+            nodeRepulsion: 400000,
+            idealEdgeLength: 100,
+            nodeOverlap: 20
+        }
+    });
+
+    // 高亮节点
+    if (graphData['highlighted-node']?.forEach) {
+        graphData['highlighted-node'].forEach(n => {
+            if (n?.data?.id) {
+                currentCytoscapeInstance.getElementById(n.data.id).addClass('highlighted-node');
+            }
+        });
+    }
+
+    // 高亮边
+    if (graphData['highlighted-edge']?.forEach) {
+        graphData['highlighted-edge'].forEach(e => {
+            if (e?.data?.id) {
+                currentCytoscapeInstance.getElementById(e.data.id).addClass('highlighted-edge');
+            }
+        });
+    }
+
+    currentCytoscapeInstance.ready(() => {
+        currentCytoscapeInstance.fit(null, 30);  // 自动调整布局
+    });
+
+    console.log("Cytoscape 图谱已渲染。");
+
+} catch (error) {
+    console.error("Cytoscape 渲染错误:", error);
+    cyTargetDiv.innerHTML = `<p>渲染图谱时出错: ${error.message}</p>`;
+    currentCytoscapeInstance = null;
+}
+
 }
 
 function updateAnswerStore(data) {
     currentAnswers.query = data.query !== undefined ? data.query : currentAnswers.query;
-    currentAnswers.vector = data.vectorAnswer !== undefined ? data.vectorAnswer : "";
-    currentAnswers.graph = data.graphAnswer !== undefined ? data.graphAnswer : "";
-    currentAnswers.hybrid = data.hybridAnswer !== undefined ? data.hybridAnswer : "";
+    currentAnswers.vector = data.vector_response !== undefined ? data.vector_response : "";
+    currentAnswers.graph = data.graph_response !== undefined ? data.graph_response : "";
+    currentAnswers.hybrid = data.hybrid_response !== undefined ? data.hybrid_response : "";
     console.log("已更新答案存储:", currentAnswers);
 }
 

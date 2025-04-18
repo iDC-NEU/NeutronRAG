@@ -88,8 +88,7 @@ def load_and_filter_data(file_path, item_id):
          return None # 无法用非整数ID在此函数中查找
 
     try:
-        with open(file_path, 'r') as file:
-            data = json.load(file)  # 加载 JSON 数据
+            data = load_all_items(file_path)
             # 通过 item_id 查找对应的元素
             filtered_data = next((item for item in data if item.get('id') == item_id_int), None)
             return filtered_data
@@ -99,6 +98,17 @@ def load_and_filter_data(file_path, item_id):
     except json.JSONDecodeError:
         print(f"Error decoding JSON from {file_path}.")
         return None
+
+#####按行逐个读取
+def load_all_items(file_path):
+    items = []
+    with open(file_path, 'r', encoding='utf-8') as f:
+        for line in f:
+            try:
+                items.append(json.loads(line.strip()))
+            except json.JSONDecodeError:
+                continue
+    return items
 
 def find_right_arrow(s):
     """
@@ -251,6 +261,17 @@ def convert_to_triples(retrieve_results):
                     triples.add(t)
     return list(triples)
 
+
+def convert_rel_to_triplets(retrieve_results):
+    triples = set()
+    for rel_seq in retrieve_results:
+        parsed_triples = split_relation(rel_seq)
+        for t in parsed_triples:
+                if len(t) == 3: # 确保是有效三元组
+                    triples.add(t)
+    return list(triples)
+    
+
 def triples_to_json(triples,evdience_entity,evdience_path):
     # --- 保持原始的 triples_to_json 逻辑 ---
     colors = [ "#FFB3BA", "#FFDFBA", "#FFFFBA", "#BAFFC9", "#BAE1FF", "#B5EAD7", "#ECC5FB", "#FFC3A0", "#FF9AA2", "#FFDAC1", "#E2F0CB", "#B5EAD7", "#C7CEEA", "#FFB7B2", "#FF9AA2", "#FFDAC1", "#C7CEEA", "#FFB3BA", "#FFDFBA", "#FFFFBA", "#BAFFC9", "#BAE1FF", "#FFC3A0", "#FF9AA2", "#FFDAC1", "#E2F0CB", "#B5EAD7", "#C7CEEA", "#FFB7B2", "#FF9AA2", "#FFDAC1", "#C7CEEA", "#FFB3BA", "#FFDFBA", "#FFFFBA", "#BAFFC9", "#BAE1FF", "#FFC3A0", "#FF9AA2", "#FFDAC1", "#E2F0CB", "#B5EAD7", "#C7CEEA", "#FFB7B2", "#FF9AA2", "#FFDAC1", "#C7CEEA", "#FFB3BA", "#FFDFBA", "#FFFFBA", "#BAFFC9", "#BAE1FF", "#FFC3A0", "#FF9AA2", "#FFDAC1" ]
@@ -335,12 +356,19 @@ def get_evidence(file_path,item_id):
 
 @app.route('/get-graph/<item_id>', methods=['GET'])
 def get_graph(item_id):
-    # 获取与 item_id 相关的 graph 数据
-    filtered_data = load_and_filter_data(GRAPH_FILE_PATH, item_id)
-    if filtered_data and 'retrieve_results' in filtered_data:
+    session_name = request.args.get("sessionName")
+    dataset_name = request.args.get("datasetName")
+
+
+    session_file = os.path.abspath(
+        os.path.join(os.path.dirname(__file__), '..', 'backend/llmragenv','chat_history', dataset_name,f"{session_name}.json")
+    )
+    filtered_data = load_and_filter_data(session_file, item_id)
+    if filtered_data and 'graph_retrieval_result' in filtered_data:
         evidence_entity,evidence_path = get_evidence(EVIDENCE_FILE_PATH,item_id)
         # 转换 retrieve_results 为三元组
-        triples = convert_to_triples(filtered_data['retrieve_results'])
+        triples = convert_rel_to_triplets(filtered_data["graph_retrieval_result"])
+        print("############triples###########",triples)
         if not triples:
              # print(f"Warning: No triples generated for item {item_id}. Returning empty graph.")
              return jsonify({'edges': [], 'nodes': [], 'highlighted-edge': [], 'highlighted-node': []})
@@ -411,23 +439,31 @@ def read_file():
 @app.route('/get-vector/<item_id>', methods=['GET'])
 def get_vector(item_id):
     # 获取与 item_id 相关的 vector 数据
-    filtered_data = load_and_filter_data(VECTOR_FILE_PATH, item_id)
+    session_name = request.args.get("sessionName")
+    dataset_name = request.args.get("datasetName")
+
+
+    session_file = os.path.abspath(
+        os.path.join(os.path.dirname(__file__), '..', 'backend/llmragenv','chat_history', dataset_name,f"{session_name}.json")
+    )
+    filtered_data = load_and_filter_data(session_file, item_id)
+    retrieval_result = []
     if filtered_data:
          # 确保前端期望的 'chunks' 键存在
-        if 'retrieve_results' in filtered_data and isinstance(filtered_data['retrieve_results'], dict):
-             chunks = []
+        if 'vector_retrieval_result' in filtered_data and isinstance(filtered_data['vector_retrieval_result'], list):
+            
              # 简单地将 retrieve_results 的值（假设是文本列表）转换为 chunk 对象
-             for key, text_list in filtered_data['retrieve_results'].items():
-                 if isinstance(text_list, list):
-                     for text in text_list:
-                          if isinstance(text, str): # 确保是字符串
-                            chunks.append({"text": text})
-             filtered_data['chunks'] = chunks # 添加 'chunks' 键
-             # del filtered_data['retrieve_results'] # 可以选择删除原始键
-        elif 'chunks' not in filtered_data:
-             filtered_data['chunks'] = [] # 如果两者都不存在，则设置为空列表
+             for text_list in filtered_data['vector_retrieval_result']:
+                 retrieval_result.append(text_list)
+        
+        # print("#######retrieval_result########",retrieval_result)
+        result = {
+            'id': item_id,
+            'chunks': retrieval_result
+            
+        }
 
-        return jsonify(filtered_data)  # 返回处理后的数据
+        return jsonify(result)  # 返回处理后的数据
     else:
         return jsonify({'error': f'Item not found or invalid ID format for vector lookup: {item_id}'}), 404
 
