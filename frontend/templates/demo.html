@@ -169,6 +169,21 @@
                     <div class="answer-content">
                         <div class="box" id="current-answer-display">
                             <div class="content" id="current-answer-content">
+                                <!-- 用户消息 -->
+                                <div class="chat-message user-message">
+                                    <div class="message-bubble">
+                                        When was Pixel Fold announced?
+                                    </div>
+                                    <img src="../lib/employee.png" alt="User Icon" class="message-icon user-icon-bubble">
+                                </div>
+
+                                <!-- 模型消息 -->
+                                <div class="chat-message model-message">
+                                    <img src="../lib/llama.png" alt="Model Icon" class="message-icon model-icon-bubble">
+                                    <div class="message-bubble">
+                                        According to the provided context information, Pixel Fold was announced on September 12, 2022.
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -180,13 +195,18 @@
                     <div class="section-title suggestion-title">
                         <span>Suggestions</span>
                         <div class="title-icons">
-                            <img src="../lib/lantern.jpg" alt="Suggestion Icon" class="suggestion-icon">
+                            <img src="../lib/lantern.png" alt="Suggestion Icon" class="suggestion-icon">
                         </div>
                     </div>
                     <div class="advice-section">
                         <div class="box" id="advice-box">
-                            <div class="content" id="advice-content">
-                                Suggestions will load after applying settings.
+
+                            <div class="content advice-content-wrapper" id="advice-content">
+                                <!-- The icon for the content -->
+                                <img src="../lib/suggestion.png" alt="Suggestion Type Icon" class="advice-type-icon">
+                                <!-- Container for the actual text suggestions -->
+                                <div id="advice-text">
+                                </div>
                             </div>
                         </div>
                     </div>

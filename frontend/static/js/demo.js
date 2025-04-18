@@ -8,7 +8,7 @@ const applySettingsButton = document.getElementById("applySettingsButton");
 const userInput = document.getElementById("user-input");
 const ragSelect = document.getElementById("rag-select");
 const currentAnswerContent = document.getElementById('current-answer-content');
-const adviceContent = document.getElementById("advice-content");
+const adviceContent = document.getElementById("advice-text");
 const vectorContent = document.getElementById("vector-content");
 const cyContainer = document.getElementById('cy');
 const questionList = document.getElementById("question-list");
@@ -85,26 +85,78 @@ function toggleSidebarSection(header) {
     }
 }
 
+// function displaySelectedAnswer() {
+//     const selectedMode = ragSelect.value;
+//     const answerToShow = currentAnswers[selectedMode];
+//     const queryToShow = currentAnswers.query;
+//     if (currentAnswerContent) {
+//         if (queryToShow || answerToShow) {
+//             const modelIcon = '../lib/llama.png';
+//             currentAnswerContent.innerHTML = `
+//                  <div class="question-container" id="answer-query-display">
+//                       <img src="../lib/employee.png" alt="Question Icon" class="question-icon">
+//                       <p class="question-text">${queryToShow || "N/A"}</p>
+//                  </div>
+//                  <div class="answer-text" id="answer-text-display">
+//                      <img src="${modelIcon}" alt="Model Icon" class="answer-icon-llama">
+//                      <span>${answerToShow || '此模式下无可用答案。'}</span>
+//                  </div>
+//             `;
+//         } else {
+//             currentAnswerContent.innerHTML = placeholderText;
+//         }
+//     } else {
+//         console.error("#current-answer-content 元素未找到");
+//     }
+// }
+
 function displaySelectedAnswer() {
     const selectedMode = ragSelect.value;
     const answerToShow = currentAnswers[selectedMode];
     const queryToShow = currentAnswers.query;
-    if (currentAnswerContent) {
-        if (queryToShow || answerToShow) {
-            const modelIcon = '../lib/llama.png';
-            currentAnswerContent.innerHTML = `
-                 <div class="question-container" id="answer-query-display">
-                      <img src="../lib/employee.png" alt="Question Icon" class="question-icon">
-                      <p class="question-text">${queryToShow || "N/A"}</p>
-                 </div>
-                 <div class="answer-text" id="answer-text-display">
-                     <img src="${modelIcon}" alt="Model Icon" class="answer-icon-llama">
-                     <span>${answerToShow || '此模式下无可用答案。'}</span>
-                 </div>
+    const answerContentElement = document.getElementById('current-answer-content'); // 获取容器
+
+    if (answerContentElement) {
+        let chatHTML = ''; // 初始化空字符串来构建聊天内容
+
+        // 如果有查询，添加用户消息
+        if (queryToShow) {
+            chatHTML += `
+                <div class="chat-message user-message">
+                    <img src="../lib/employee.png" alt="User Icon" class="message-icon user-icon-bubble">
+                    <div class="message-bubble">
+                        ${queryToShow}
+                    </div>
+                </div>
             `;
-        } else {
-            currentAnswerContent.innerHTML = placeholderText;
         }
+
+        // 如果有对应模式的答案，添加模型消息
+        if (answerToShow) {
+            const modelIcon = '../lib/llama.png'; // 或者根据模型动态选择图标
+            chatHTML += `
+                <div class="chat-message model-message">
+                    <img src="${modelIcon}" alt="Model Icon" class="message-icon model-icon-bubble">
+                    <div class="message-bubble">
+                        ${answerToShow}
+                    </div>
+                </div>
+            `;
+        }
+
+        // 如果既没有查询也没有答案，显示占位符或提示
+        if (!queryToShow && !answerToShow) {
+            // 你可以用回之前的 placeholderText，或者自定义一个聊天界面的提示
+            // chatHTML = placeholderText; // 之前的占位符
+             chatHTML = `<div class="placeholder-text">输入问题并选择模式以开始。</div>`; // 新的提示
+        }
+
+        // 将构建好的 HTML 设置为容器的内容
+        answerContentElement.innerHTML = chatHTML;
+
+        // (可选) 滚动到底部以显示最新消息
+        answerContentElement.scrollTop = answerContentElement.scrollHeight;
+
     } else {
         console.error("#current-answer-content 元素未找到");
     }
