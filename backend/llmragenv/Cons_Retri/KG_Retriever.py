@@ -2,7 +2,7 @@
 Author: fzb fzb0316@163.com
 Date: 2024-09-19 08:48:47
 LastEditors: lpz 1565561624@qq.com
-LastEditTime: 2025-03-27 10:40:43
+LastEditTime: 2025-04-18 10:54:19
 FilePath: /RAGWebUi_demo/llmragenv/Retriever/retriever_graph.py
 Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
 '''
@@ -18,7 +18,7 @@ from llmragenv.LLM.llm_base import LLMBase
 from database.graph.graph_database import GraphDatabase
 import numpy as np
 from llmragenv.Cons_Retri.Embedding_Model import EmbeddingEnv
-
+from llmragenv.Cons_Retri.pruning import *
 import cupy as cp
 
 
@@ -117,8 +117,8 @@ class RetrieverGraph(object):
         self.graph_database = graphdb
         self._llm = llm
         
-        self.triplet2id = self.graph_database.triplet2id
-        self.triplet_embeddings = self.graph_database.triplet_embeddings
+        # self.triplet2id = self.graph_database.triplet2id
+        # self.triplet_embeddings = self.graph_database.triplet_embeddings
 
     def extract_keyword(self, question, max_keywords=5):
         prompt = keyword_extract_prompt.format(question=question, max_keywords=max_keywords)
@@ -144,14 +144,13 @@ class RetrieverGraph(object):
 
         # 只将每个关键词的第一个字母大写
         capitalized_keywords = [keyword.capitalize() for keyword in capitalized_keywords]
-        capitalized_keywords.append("Apple")
         
         # ic(capitalized_keywords)
         # print(f"capitalized_keywords: {capitalized_keywords}")
 
         return capitalized_keywords
 
-    def retrieve_2hop(self, question, pruning = None, build_node = False):
+    def retrieve_2hop(self, question, pruning = True, build_node = False):
         self.pruning = pruning
 
         keywords = self.extract_keyword(question)
@@ -159,31 +158,21 @@ class RetrieverGraph(object):
         query_results = {}
 
         if pruning:
-            rel_map = self.graph_database.get_rel_map(entities=keywords, limit=1000000)
+            rel_map = self.graph_database.get_rel_map(entities=keywords, limit=10)
+            # print("##########rel_map##########",rel_map)
         else:
             rel_map = self.graph_database.get_rel_map(entities=keywords)
 
         clean_rel_map = self.graph_database.clean_rel_map(rel_map)
+        print("############clean_rel_map#################",clean_rel_map)
+        all_knowledge_sequence = []
+        for triples in clean_rel_map.values():
+            all_knowledge_sequence.extend(triples)
+        pruning_knowledge_sequence = semantic_pruning(question=question,knowledge_sequence=all_knowledge_sequence)
+        pruned_sequence_only = [triple for triple, score in pruning_knowledge_sequence]
+        print("#############pruned_sequence_only################",pruned_sequence_only)
 
-        query_results.update(clean_rel_map)
-
-        knowledge_sequence = self.graph_database.get_knowledge_sequence(query_results)
-
-        if knowledge_sequence == []:
-            return knowledge_sequence
-
-        if self.pruning:
-            pruning_knowledge_sequence, pruning_knowledge_dict = self.postprocess(question, knowledge_sequence)
-            
-            if build_node:
-                self.nodes = self.graph_database.build_nodes(pruning_knowledge_sequence,
-                                pruning_knowledge_dict)
-        else:
-            pruning_knowledge_sequence = knowledge_sequence
-            if build_node:       
-                self.nodes = self.graph_database.build_nodes(knowledge_sequence, rel_map)
-
-        return pruning_knowledge_sequence
+        return pruned_sequence_only
     
 
     def retrieve_2hop_with_keywords(self, question, keywords = [], pruning = None, build_node = False):
@@ -221,6 +210,13 @@ class RetrieverGraph(object):
 
     def get_nodes(self):
         return self.nodes
+    
+
+    ###修改剪枝策略##
+    def postprocess_clean_rel_map(self, question,clean_rel_map):
+        if len(clean_rel_map) == 0:
+            return []
+
 
     def postprocess(self, question, knowledge_sequence):
         if len(knowledge_sequence) == 0:
@@ -275,3 +271,8 @@ class RetrieverGraph(object):
         return sorted_all_rel_scores[:topk]
 
 
+
+# keywords: ['2022', 'Tour de france', 'Won', 'Apple']
+# question: Who won the 2022 Tour de France?
+# if __name__ == "__main__":
+    

@@ -2,7 +2,7 @@
 Author: lpz 1565561624@qq.com
 Date: 2025-03-19 20:28:13
 LastEditors: lpz 1565561624@qq.com
-LastEditTime: 2025-04-15 23:24:10
+LastEditTime: 2025-04-17 23:22:59
 FilePath: /lipz/NeutronRAG/NeutronRAG/backend/llmragenv/demo_chat.py
 Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
 '''
@@ -272,10 +272,11 @@ class Demo_chat:
         self.strategy = strategy
         self.api_key = api_key
         #自动匹配 URL
-        self.url = self.Model_Url_Mapping.get(model_name, "http://localhost:11434/v1")  # 若没有匹配上的模型，则默认使用 Ollama
+        self.url = self.Model_Url_Mapping.get(model_name, "https://api.deepseek.com")  # 若没有匹配上的模型，则默认使用 Ollama
+        print("model_name",model_name)
         self.llm = self.load_llm(self.model_name,self.url,self.api_key)
         self.vectordb = MilvusDB(dataset_name, 1024, overwrite=False, store=True,retriever=True)
-        self.graphdb = GraphDBFactory("nebulagraph").get_graphdb(space_name='rgb')
+        self.graphdb = GraphDBFactory("nebulagraph").get_graphdb(space_name=dataset_name)
         self.chat_graph = ChatGraphRAG(self.llm, self.graphdb)
         self.chat_vector = ChatVectorRAG(self.llm,self.vectordb)
         path_name = f"chat_history/{dataset_name}/{path_name}.json"
@@ -286,6 +287,7 @@ class Demo_chat:
             os.makedirs(full_output_folder)
 
         self.path_name = os.path.join(base_path, path_name)
+        print(path_name)
         
         self.evaluator = Evaluator(data_name=dataset_name,mode=strategy)
 
@@ -361,7 +363,7 @@ class Demo_chat:
 
 
     def new_history_chat(self, mode="rewrite"):
-        evidence_path = "/home/yangxb/NeutronRAG/backend/evaluator/rgb_evidence_test.json"
+        evidence_path = "./home/yangxb/NeutronRAG/backend/evaluator/rgb_evidence_test.json"
         print("dataset_path:",self.dataset_path)
         with open(self.dataset_path, "r") as f:  # 读取模式改为'r'，避免覆盖原数据
             data = json.load(f)

@@ -614,7 +614,8 @@ applySettingsButton.addEventListener("click", async () => {
         hop: hop,
         type: type,
         entity: entity,
-        dataset: selectedDatasetName
+        dataset: selectedDatasetName,
+        session: currentSession
     };
     // try {
     //     const postData = {
@@ -774,3 +775,18 @@ historySessionSelect.addEventListener('change', (event) => {
 newHistorySessionButton.addEventListener('click', showNewSessionInput);
 newSessionNameInput.addEventListener('keydown', (event) => { if (event.key === 'Enter') { event.preventDefault(); handleConfirmNewSession(); } else if (event.key === 'Escape') { hideNewSessionInput(); } });
 cancelNewSessionButton.addEventListener('click', hideNewSessionInput);
+
+// function startAutoRefreshSessionHistory(intervalMs = 60000) {
+//     // 第一次立即执行一次
+//     displaySessionHistory();
+
+//     // 每隔 intervalMs 毫秒执行一次
+//     setInterval(() => {
+//         displaySessionHistory();
+//     }, intervalMs);
+// }
+
+
+// window.addEventListener('DOMContentLoaded', () => {
+//     startAutoRefreshSessionHistory(); // 默认每分钟刷新一次
+// });

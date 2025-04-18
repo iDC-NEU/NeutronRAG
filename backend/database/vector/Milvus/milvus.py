@@ -146,7 +146,7 @@ class MilvusDB(VectorDatabase):
         self.embed_model = HuggingFaceEmbedding(
                 model_name="BAAI/bge-large-en-v1.5",
                 embed_batch_size=20,
-                device="cuda:0")
+                device="cuda:2")
 
 
         connections.connect("default", host="localhost", port=server_port)

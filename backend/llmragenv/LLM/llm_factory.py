@@ -2,7 +2,7 @@
 Author: fzb fzb0316@163.com
 Date: 2024-09-20 13:37:09
 LastEditors: lpz 1565561624@qq.com
-LastEditTime: 2025-04-08 15:46:23
+LastEditTime: 2025-04-17 23:14:07
 FilePath: /RAGWebUi_demo/llmragenv/LLM/llm_factory.py
 Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
 '''
@@ -29,7 +29,7 @@ LLMProvider = {
     "qwen" : [],
     "moonshot" : [],
     "lingyiwanwu" : [],
-    "deepseek" : [],
+    "deepseek" : ["deepseek-reasoner"],
     "doubao" : [],
     "gpt" : ["gpt-4o-mini"],
     "llama" : ["qwen:0.5b", "llama2:7b", "llama2:13b", "llama2:70b","qwen:7b","qwen:14b","qwen:72b","qwen:4b","llama3:8b"]
@@ -37,7 +37,7 @@ LLMProvider = {
 
 class ClientFactory(metaclass=Singleton):
     
-    def __init__(self, model_name, url, key, llmbackend="llama_index"):
+    def __init__(self, model_name, url, key, llmbackend="openai"):
         """
         初始化 ClientFactory
 
@@ -76,6 +76,7 @@ class ClientFactory(metaclass=Singleton):
                 return LingyiwanwuClient(self.model_name, self.url, self.key)
 
             elif self.model_name in LLMProvider["deepseek"]:
+                print("deepseek-reasoner")
                 return DeepseekClient(self.model_name, self.url, self.key)
 
             elif self.model_name in LLMProvider["doubao"]:

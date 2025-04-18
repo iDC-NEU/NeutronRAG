@@ -263,8 +263,8 @@ class NebulaDB(GraphDatabase):
 
         self.retriever = None
 
-        self.triplet2id, self.triplet_embeddings = self.generate_embedding()
-        self.entities = self.get_all_entities()
+        # self.triplet2id, self.triplet_embeddings = self.generate_embedding()
+        # self.entities = self.get_all_entities()
 
     def __del__(self):
         del self.client

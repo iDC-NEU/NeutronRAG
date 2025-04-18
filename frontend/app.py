@@ -743,6 +743,7 @@ def load_model():
         type = dataset_info.get('type')
         entity = dataset_info.get('entity')
         dataset = dataset_info.get('dataset')
+        session = dataset_info.get('session')
         dataset_path = f"../data/{hop}/{type}/{entity}/{dataset}/{dataset}.json"    
         if key == "" or key is None: # 处理空或 None 的 key
             key = "ollama" # 默认 key
@@ -761,7 +762,7 @@ def load_model():
 
         # 加载新模型
         print(f"正在加载模型: {model_name} (API Key: {'*'*(len(key)-3)+key[-3:] if key != 'ollama' and key else 'ollama'}, 数据集: {dataset})")
-        current_model = Demo_chat(model_name=model_name, api_key=key, dataset_name=dataset,dataset_path=dataset_path) # 传递数据集参数
+        current_model = Demo_chat(model_name=model_name, api_key=key, dataset_name=dataset,dataset_path=dataset_path,path_name=session) # 传递数据集参数
 
         # 测试模型 (原始逻辑)
         test_result = current_model.chat_test() # 假设 chat_test 不需要输入
