@@ -1,8 +1,8 @@
 '''
 Author: fzb fzb0316@163.com
 Date: 2024-09-15 17:15:53
-LastEditors: fzb fzb0316@163.com
-LastEditTime: 2024-09-21 17:53:17
+LastEditors: lpz 1565561624@qq.com
+LastEditTime: 2025-04-19 00:35:19
 FilePath: /RAGWebUi_demo/config/config.py
 Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
 '''
@@ -61,12 +61,12 @@ db_config = {
     'database': 'chat'  
 }
 
-try:
-    conn = mysql.connector.connect(**db_config)
-    print("数据库连接成功！")
-    conn.close()
-except mysql.connector.Error as err:
-    print(f"数据库连接失败: {err}")
+# try:
+#     conn = mysql.connector.connect(**db_config)
+#     print("数据库连接成功！")
+#     conn.close()
+# except mysql.connector.Error as err:
+#     print(f"数据库连接失败: {err}")
 
     
 # if __name__ == "__main__":

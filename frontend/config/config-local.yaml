@@ -68,6 +68,7 @@ database:
     # 注意数字用引号括起来
     password: "nebula"
 
+backend_path: /home/lipz/NeutronRAG/NeutronRAG/backend
 
-organization: iDC-NE
+organization: iDC-NEU
 

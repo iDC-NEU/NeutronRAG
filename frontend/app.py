@@ -3,8 +3,9 @@ import re
 import time
 import uuid
 from datetime import datetime, timezone
+from config.config import Config
 from flask import Flask, Response, request, jsonify, render_template, session
-
+import os
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 from flask_cors import CORS
@@ -945,4 +946,4 @@ def get_session_history():
 
 if __name__ == '__main__':
     # use_reloader=False 对于使用全局变量进行内存存储很重要
-    app.run(host='0.0.0.0', port=5001, debug=True, use_reloader=False)
+    app.run(host='0.0.0.0', port=int(Config.get_instance().get_with_nested_params("server", "ui_port")), debug=True, use_reloader=False)
