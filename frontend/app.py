@@ -494,19 +494,21 @@ def get_analysis_data():
         graph_ret_recall, graph_ret_relevance = simulate.statistic_graph_retrieval(simulate.rgb_graph_retrieval)
         vector_gen_precision, vector_gen_faithfulness, vector_gen_accuracy = simulate.statistic_vector_generation(simulate.rgb_vector_generation)
         vector_ret_precision, vector_ret_relevance, vector_ret_recall = simulate.statistic_vector_retrieval(simulate.rgb_vector_retrieval)
+        hybrid_precision, hybrid_faithfulness, hybrid_accuracy, hybrid_relevance, hybrid_recall = simulate.statistic_hybrid_generation(simulate.rgb_vector_retrieval)
 
-        # 模拟错误统计 (原始占位符)
+        # 临时统计
         error_stats_vectorrag = {'None Result': 37.7, 'Lack Information': 14.2, 'Noisy': 7.1, 'Other': 41.0}
         error_stats_graphrag = {'None Result': 69.4, 'Lack Information': 8.3, 'Noisy': 5.6, 'Other': 16.7}
         error_stats_hybridrag = {'None Result': 36.8, 'Lack Information': 9.1, 'Noisy': 9.1, 'Other': 45.0}
 
-        # 模拟评估指标 (原始占位符)
+        # 临时 hybridrag 统计
         eval_metrics_vectorrag = {'precision': vector_ret_precision, 'relevance': vector_ret_relevance, 'recall': vector_ret_recall, 'faithfulness': vector_gen_faithfulness, 'accuracy': vector_gen_accuracy}
         eval_metrics_graphrag = {'precision': graph_ret_relevance, 'relevance': graph_ret_relevance, 'recall': graph_ret_recall, 'faithfulness': graph_gen_faithfulness, 'accuracy': graph_gen_accuracy}
-        eval_metrics_hybridrag = {'precision': 0.6, 'relevance': 0.7, 'recall': 0.5, 'faithfulness': 0.7, 'accuracy': 0.5} # HybridRAG data needs to be filled with your logic (原始注释)
-
+        eval_metrics_hybridrag = {'precision': hybrid_precision, 'relevance': hybrid_relevance, 'recall': hybrid_recall, 'faithfulness': hybrid_faithfulness, 'accuracy': hybrid_accuracy}
+        
+        # 临时 hybridrag 统计
         analysis_data = {
-            "accuracy": { "graphrag": round(graph_gen_accuracy * 100, 1), "vectorrag": round(vector_gen_accuracy * 100, 1), "hybridrag": 80 }, # Placeholder for HybridRAG Accuracy (原始注释)
+            "accuracy": { "graphrag": round(graph_gen_accuracy * 100, 1), "vectorrag": round(vector_gen_accuracy * 100, 1), "hybridrag": round(hybrid_accuracy * 100, 1) },
             "errorStatistics": { "vectorrag": error_stats_vectorrag, "graphrag": error_stats_graphrag, "hybridrag": error_stats_hybridrag },
             "evaluationMetrics": { "vectorrag": eval_metrics_vectorrag, "graphrag": eval_metrics_graphrag, "hybridrag": eval_metrics_hybridrag }
         }
