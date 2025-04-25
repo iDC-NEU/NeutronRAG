@@ -109,7 +109,7 @@ python backend_chat.py --dataset_name "rgb" --llm "llama2:7b" --func "Graph RAG"
 # Issue:
 Although web_chat() allows selecting a different LLM for each chat session, in practice, only the first selection takes effect—subsequent interactions always use the initially chosen model.
 # Code Structure:
-Includes graphrag and vectorrag
+Includes graphrag, vectorrag, hybridrag
 
 
 
