@@ -1,77 +1,137 @@
+/* 全局和 Body 设置 */
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
 body {
-    font-family: 'SimSun', '宋体', sans-serif;
-    background-color: #f4f4f9;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+    background: linear-gradient(to right top, #65dfc9, #6cdbeb);
     display: flex;
     justify-content: center;
     align-items: center;
-    height: 100vh;
-    margin: 0;
+    min-height: 100vh;
+    padding: 20px;
+    overflow: hidden; /* 防止初始动画溢出 */
 }
 
+/* 定义容器进入动画 */
+@keyframes slideUpFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* 容器样式 */
 .container {
-    background-color: #fff;
-    padding: 30px;
-    border-radius: 8px;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-    width: 300px;
+    background-color: #ffffff;
+    padding: 40px;
+    border-radius: 10px;
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+    width: 100%;
+    max-width: 400px;
+    text-align: center;
+    /* 应用加载动画 */
+    animation: slideUpFadeIn 0.6s ease-out forwards;
+    opacity: 0; /* 初始透明，配合动画 */
 }
 
+/* 标题样式 */
 h2 {
-    text-align: center;
-    margin-bottom: 30px;
-    font-size: 36px;   /* 设置字体大小 */
-    font-weight: bold;  /* 设置字体加粗 */
+    margin-bottom: 35px;
+    font-size: 28px;
+    color: #333;
+    font-weight: 600;
 }
 
-form {
-    display: flex;
-    flex-direction: column;
+/* 表单分组 */
+.input-group {
+    margin-bottom: 20px;
+    text-align: left;
 }
 
+/* 标签样式 */
 label {
-    font-size: 24px;
-    margin-bottom: 5px;
+    display: block;
+    font-size: 14px;
+    font-weight: 500;
+    color: #555;
+    margin-bottom: 8px;
 }
 
-input {
-    font-size: 20px;
-    padding: 8px;
-    margin-bottom: 15px;
+/* 输入框样式 */
+input[type="text"],
+input[type="password"],
+input[type="email"],
+input[type="tel"] {
+    width: 100%;
+    padding: 12px 15px;
+    font-size: 16px;
     border: 1px solid #ccc;
-    border-radius: 4px;
+    border-radius: 6px;
+    /* 增加更平滑的过渡效果 */
+    transition: border-color 0.3s ease-in-out, box-shadow 0.3s ease-in-out;
 }
 
-button {
-    background-color: #4CAF50;
+input:focus {
+    border-color: #6cdbeb;
+    box-shadow: 0 0 0 4px rgba(108, 219, 235, 0.25); /* 焦点阴影稍大 */
+    outline: none;
+}
+
+/* 按钮样式 */
+button[type="submit"] {
+    background: linear-gradient(to right, #65dfc9, #6cdbeb);
     color: white;
-    padding: 10px;
+    padding: 12px 20px;
     border: none;
-    border-radius: 4px;
+    border-radius: 6px;
     cursor: pointer;
-    font-size: 22px;
-    width: 60%; /* 相对父容器宽度 */
-    margin: 0 auto;      /* 水平居中 */
-    height: 40px;         /* 设置按钮的高度 */
-    display: flex;           /* 使用 flex 布局 */
-    align-items: center;      /* 垂直居中 */
-    justify-content: center;  /* 水平居中 */
-}
-
-button:hover {
-    background-color: #45a049;
-}
-
-p {
-    text-align: center;
-    margin-top: 15px;
     font-size: 18px;
+    font-weight: 600;
+    width: 100%;
+    margin-top: 10px;
+    /* 增加 transform 过渡 */
+    transition: opacity 0.2s ease-in-out, transform 0.2s ease;
+    transform: translateY(0); /* 初始状态 */
+}
+
+button[type="submit"]:hover {
+    opacity: 0.9;
+    transform: translateY(-2px); /* 悬停时轻微上移 */
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1); /* 添加轻微阴影 */
+}
+
+button[type="submit"]:active {
+    opacity: 1; /* 点击时恢复不透明 */
+    transform: scale(0.98) translateY(-1px); /* 点击时缩小并保持轻微上移感 */
+    box-shadow: none; /* 点击时移除阴影 */
+}
+
+/* 注册/登录链接 */
+p.register-link,
+p.login-link {
+    text-align: center;
+    margin-top: 25px;
+    font-size: 14px;
+    color: #666;
 }
 
 a {
-    color: #007BFF;
+    color: #65dfc9;
     text-decoration: none;
+    font-weight: 500;
+    /* 添加颜色过渡 */
+    transition: color 0.2s ease-in-out;
 }
 
 a:hover {
     text-decoration: underline;
+    color: #5bc8b3;
 }

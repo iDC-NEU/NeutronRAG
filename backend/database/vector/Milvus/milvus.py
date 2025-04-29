@@ -10,9 +10,9 @@ from pymilvus import (
     # CollectionSchema,
     DataType,
     Collection,
-    Milvus,
-    # MilvusClient,
-    # Connections,
+    # Milvus,
+    MilvusClient,
+    Connections,
 )
 from database.vector.vector_database import VectorDatabase
 
@@ -38,9 +38,9 @@ from pymilvus import (
     # CollectionSchema,
     DataType,
     Collection,
-    Milvus,
-    # MilvusClient,
-    # Connections,
+    # Milvus,
+    MilvusClient,
+    Connections,
 )
 from llama_index.core.schema import NodeWithScore, QueryBundle
 from llama_index.core.retrievers import (
@@ -66,9 +66,9 @@ from pymilvus import (
     # CollectionSchema,
     DataType,
     Collection,
-    Milvus,
-    # MilvusClient,
-    # Connections,
+    # Milvus,
+    MilvusClient,
+    Connections,
 )
 from llama_index.core.schema import NodeWithScore, QueryBundle
 

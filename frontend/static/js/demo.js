@@ -1,8 +1,15 @@
-// --- 全局配置 ---
-// !! 切换模式: true = 使用后端 API 获取/保存会话历史, false = 使用本地对象模拟
-const USE_BACKEND_HISTORY = true;
+// --- 全局配置 & 状态 ---
+let isGenerating = false;
+let abortController = new AbortController();
+let currentCytoscapeInstance = null;
+let currentAnswers = { query: "", vector: "", graph: "", hybrid: "" };
+let selectedDatasetName = null; // Dataset name selected in settings
+let sessionsList = []; // List of {id, name} for the current user's sessions
+let currentSessionId = null; // ID of the currently selected chat session
+let currentUser = { logged_in: false, username: null }; // Store user auth state
+let currentMessageId = null; // Track the message ID being displayed (from history click)
 
-// --- 常量与全局变量 ---
+// --- 常量与 DOM 元素 ---
 const sendButton = document.getElementById("send-button");
 const applySettingsButton = document.getElementById("applySettingsButton");
 const userInput = document.getElementById("user-input");
@@ -10,43 +17,27 @@ const ragSelect = document.getElementById("rag-select");
 const currentAnswerContent = document.getElementById('current-answer-content');
 const adviceContent = document.getElementById("advice-text");
 const vectorContent = document.getElementById("vector-content");
-const cyContainer = document.getElementById('cy');
-const questionList = document.getElementById("question-list");
+const cyContainer = document.getElementById('cy-container'); // Changed selector to container
+const questionList = document.getElementById("question-list"); // Displays messages of current session
 const modelSelect = document.getElementById("model-select");
 const apiKeyInput = document.getElementById("api-key-input");
 const dim1Select = document.getElementById('dim1-hops');
 const dim2Select = document.getElementById('dim2-task');
 const dim3Select = document.getElementById('dim3-scale');
 const selectedDatasetsList = document.getElementById('selected-datasets-list');
-const historySessionSelect = document.getElementById('history-session-select');
+const historySessionSelect = document.getElementById('history-session-select'); // Dropdown to select session
 const newHistorySessionButton = document.getElementById('new-history-session-button');
 const newSessionInputContainer = document.getElementById('new-session-input-container');
 const newSessionNameInput = document.getElementById('new-session-name-input');
 const cancelNewSessionButton = document.getElementById('cancel-new-session-button');
 
-let isGenerating = false;
-let abortController = new AbortController();
-let currentCytoscapeInstance = null;
-let currentAnswers = { query: "", vector: "", graph: "", hybrid: "" };
-const placeholderText = `<div class="placeholder-text">请选择 RAG 模式，输入内容或从历史记录中选择，然后点击应用设置。</div>`;
-let history_list = [];
-let selectedDatasetName = null;
+// Placeholders for user info/logout from demo.html
+const userInfoDisplay = document.getElementById('user-info-display');
+const logoutButton = document.getElementById('logout-button');
 
-let sessionsList = [];
-let currentSession = null;
-let current_vector_response= null
-let current_graph_response= null
-let current_hybrid_response= null
-// let historySessions = {
-//     "Default Session": [
-//         { id: 'mock1', query: 'Sample Query 1 (Mock)', answer: 'Vector answer for Sample 1', type: 'GREEN', vectorAnswer: 'Vector answer for Sample 1', graphAnswer: 'Graph answer for Sample 1', hybridAnswer: 'Hybrid answer for Sample 1', timestamp: new Date(Date.now() - 100000).toISOString() },
-//         { id: 'mock2', query: 'Sample Query 2 (Mock Error)', answer: 'Vector error', type: 'RED', vectorAnswer: 'Vector error', graphAnswer: 'Graph error', hybridAnswer: 'Hybrid error', timestamp: new Date(Date.now() - 50000).toISOString() }
-//     ],
-//     "Another Session": []
-// };
-let historySessions = {}
+const placeholderText = `<div class="placeholder-text">请选择 RAG 模式，输入内容或从历史记录中选择。</div>`;
 
-// --- 数据集层级结构 ---
+// --- 数据集层级结构 (Keep as is) ---
 const datasetHierarchy = {
     "single_hop": {
         "specific": {
@@ -68,10 +59,9 @@ const datasetHierarchy = {
             "multi_entity": ["Multi-hop", "CRUD-RAG"]
         }
     }
-};
+}; // Make sure this reflects your actual data structure
 
-// --- UI 辅助函数 ---
-
+// --- UI 辅助函数 (Keep as is or adapt) ---
 function toggleSidebarSection(header) {
     const content = header.nextElementSibling;
     const icon = header.querySelector('.material-icons');
@@ -85,159 +75,328 @@ function toggleSidebarSection(header) {
     }
 }
 
-// function displaySelectedAnswer() {
-//     const selectedMode = ragSelect.value;
-//     const answerToShow = currentAnswers[selectedMode];
-//     const queryToShow = currentAnswers.query;
-//     if (currentAnswerContent) {
-//         if (queryToShow || answerToShow) {
-//             const modelIcon = '../lib/llama.png';
-//             currentAnswerContent.innerHTML = `
-//                  <div class="question-container" id="answer-query-display">
-//                       <img src="../lib/employee.png" alt="Question Icon" class="question-icon">
-//                       <p class="question-text">${queryToShow || "N/A"}</p>
-//                  </div>
-//                  <div class="answer-text" id="answer-text-display">
-//                      <img src="${modelIcon}" alt="Model Icon" class="answer-icon-llama">
-//                      <span>${answerToShow || '此模式下无可用答案。'}</span>
-//                  </div>
-//             `;
-//         } else {
-//             currentAnswerContent.innerHTML = placeholderText;
-//         }
-//     } else {
-//         console.error("#current-answer-content 元素未找到");
-//     }
-// }
+// --- 认证与初始化 ---
+
+async function checkAuth() {
+    // Checks login status when the page loads
+    try {
+        const response = await fetch('/api/check-auth'); // API endpoint to check session
+        if (!response.ok) {
+            // Assume not logged in if check fails for any reason other than explicit 'logged_in: false'
+            console.warn(`Auth check failed: ${response.status}, assuming logged out.`);
+            currentUser = { logged_in: false };
+        } else {
+             currentUser = await response.json();
+        }
+
+
+        if (!currentUser.logged_in) {
+            console.log("User not logged in. Redirecting to login.");
+            window.location.href = '/login'; // Redirect if not logged in
+        } else {
+            console.log(`User logged in: ${currentUser.username}`);
+            updateUserInfoUI(); // Show username and logout button
+            await initializeDemo(); // Load sessions etc. only if logged in
+        }
+    } catch (error) {
+        console.error("Error checking authentication:", error);
+        // Redirect to login on any error during auth check
+        alert("无法验证登录状态，请重新登录。");
+        window.location.href = '/login';
+    }
+}
+
+function updateUserInfoUI() {
+    // Updates the header UI based on login status
+    if (currentUser.logged_in && userInfoDisplay) {
+        userInfoDisplay.textContent = `欢迎, ${currentUser.username}`;
+        userInfoDisplay.style.display = 'inline'; // Show username
+    } else if (userInfoDisplay) {
+         userInfoDisplay.style.display = 'none'; // Hide username
+    }
+     if (logoutButton) {
+         logoutButton.style.display = currentUser.logged_in ? 'inline-block' : 'none'; // Show/hide logout button
+     }
+}
+
+async function handleLogout() {
+    // Called when logout button is clicked
+    console.log("Logging out...");
+    try {
+        const response = await fetch('/api/logout', { method: 'POST' });
+        if (!response.ok) {
+             // Try to get error message from response body
+             const errData = await response.json().catch(() => ({})); // Default empty if JSON parse fails
+             throw new Error(errData.error || `Logout failed: ${response.status}`);
+        }
+        const data = await response.json();
+        console.log(data.message); // "注销成功"
+        currentUser = { logged_in: false, username: null }; // Update local state
+        window.location.href = '/login'; // Redirect to login page
+    } catch (error) {
+        console.error("Logout error:", error);
+        alert(`登出时出错: ${error.message}`);
+    }
+}
+
+async function initializeDemo() {
+    // Initial setup after successful login check
+    console.log("Initializing demo for logged in user...");
+    // Initial UI setup (collapsing sections etc.)
+    document.querySelectorAll('.sidebar-section .sidebar-header, .sidebar-section-inner .sidebar-header-inner').forEach((header) => {
+        const content = header.nextElementSibling; const icon = header.querySelector('.material-icons');
+        if (!header.classList.contains('collapsed')) header.classList.add("collapsed");
+        if (content) content.style.display = "none";
+        if (icon) icon.textContent = 'expand_more';
+    });
+    populateSelect(dim1Select, Object.keys(datasetHierarchy));
+    clearSelect(dim2Select);
+    clearSelect(dim3Select);
+    updateDatasetSelection(); // Handles dependent dropdowns
+    applySettingsButton.disabled = true; // Disable until dataset is selected
+
+    await fetchUserSessions(); // Load user's sessions into dropdown
+    displaySelectedAnswer(); // Show initial placeholder in answer area
+    clearRetrievalResults(); // Clear retrieval areas initially
+}
+
+// --- 核心 RAG & 交互逻辑 ---
 
 function displaySelectedAnswer() {
+    // Displays the query and the answer for the selected RAG mode
     const selectedMode = ragSelect.value;
-    const answerToShow = currentAnswers[selectedMode];
+    // Map backend fields to frontend modes if necessary (assuming direct match here)
+    const answerMap = {
+        'vector': currentAnswers.vector,
+        'graph': currentAnswers.graph,
+        'hybrid': currentAnswers.hybrid
+    };
+    const answerToShow = answerMap[selectedMode];
     const queryToShow = currentAnswers.query;
-    const answerContentElement = document.getElementById('current-answer-content'); // 获取容器
+    const answerContentElement = document.getElementById('current-answer-content');
 
     if (answerContentElement) {
-        let chatHTML = ''; // 初始化空字符串来构建聊天内容
-
-        // 如果有查询，添加用户消息
+        let chatHTML = '';
+        // Display user query bubble
         if (queryToShow) {
-            chatHTML += `
+             // Use url_for in JS is tricky, use relative or absolute paths known at build/deploy time
+             // Assuming static files are served from /static/
+             chatHTML += `
                 <div class="chat-message user-message">
-                    <img src="../lib/employee.png" alt="User Icon" class="message-icon user-icon-bubble">
-                    <div class="message-bubble">
-                        ${queryToShow}
-                    </div>
-                </div>
-            `;
+                    <img src="/static/lib/employee.png" alt="User Icon" class="message-icon user-icon-bubble">
+                    <div class="message-bubble">${queryToShow}</div>
+                </div>`;
         }
-
-        // 如果有对应模式的答案，添加模型消息
+        // Display model answer bubble
         if (answerToShow) {
-            const modelIcon = '../lib/llama.png'; // 或者根据模型动态选择图标
-            chatHTML += `
+             const modelIcon = '/static/lib/llama.png'; // Adjust path if needed
+             chatHTML += `
                 <div class="chat-message model-message">
                     <img src="${modelIcon}" alt="Model Icon" class="message-icon model-icon-bubble">
-                    <div class="message-bubble">
-                        ${answerToShow}
-                    </div>
-                </div>
-            `;
+                    <div class="message-bubble">${answerToShow}</div>
+                </div>`;
         }
-
-        // 如果既没有查询也没有答案，显示占位符或提示
+        // Display placeholder if no query/answer yet
         if (!queryToShow && !answerToShow) {
-            // 你可以用回之前的 placeholderText，或者自定义一个聊天界面的提示
-            // chatHTML = placeholderText; // 之前的占位符
-             chatHTML = `<div class="placeholder-text">输入问题并选择模式以开始。</div>`; // 新的提示
+             chatHTML = `<div class="placeholder-text">请输入问题并选择模式以开始，或从历史记录中选择。</div>`;
         }
-
-        // 将构建好的 HTML 设置为容器的内容
         answerContentElement.innerHTML = chatHTML;
-
-        // (可选) 滚动到底部以显示最新消息
+        // Scroll to the bottom of the chat window
         answerContentElement.scrollTop = answerContentElement.scrollHeight;
-
     } else {
         console.error("#current-answer-content 元素未找到");
     }
 }
 
-async function fetchAndDisplaySuggestions() {
-    adviceContent.innerHTML = "正在加载建议...";
+sendButton.addEventListener("click", async () => {
+    // Handles sending user input to the backend for generation
+    if (isGenerating) {
+        // If already generating, the button acts as a cancel button
+        abortController.abort();
+        console.log("Generation aborted by user.");
+        // Reset button state in finally block
+        return;
+    }
+    if (!currentSessionId) {
+        alert("请先选择或创建一个聊天会话。");
+        return;
+    }
+    const query = userInput.value.trim();
+    if (!query) {
+        alert("请输入查询内容。");
+        return;
+    }
+
+    isGenerating = true;
+    sendButton.textContent = "取消"; // Change button text
+    sendButton.classList.add("generating"); // Optional: for styling
+    userInput.disabled = true; // Disable input during generation
+    abortController = new AbortController(); // Create a new controller for this request
+
+    // Clear previous results, show query and loading state
+    currentAnswers = { query: query, vector: "生成中...", graph: "生成中...", hybrid: "生成中..." };
+    displaySelectedAnswer();
+    clearRetrievalResults(true); // Show loading indicators in retrieval areas
+
+    let generatedData = {};
+    let fetchError = null;
+
     try {
-        // #backend-integration: 从后端 /get_suggestions 接口获取建议
-        const response = await fetch('/get_suggestions');
-        if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(`网络错误: ${response.status} ${errorText}`);
-        }
-        const data = await response.json();
-        console.log("建议数据:", data);
-        if (data.suggestionsHTML) {
-            adviceContent.innerHTML = data.suggestionsHTML;
-        } else if (data.advice) {
-            adviceContent.innerHTML = `
-                <h3>向量 RAG 错误:</h3>
-                <ul>
-                    <li>检索错误: ${data.vector_retrieve_error ?? 'N/A'}</li>
-                    <li>丢失错误: ${data.vector_lose_error ?? 'N/A'}</li>
-                    <li>丢失正确: ${data.vector_lose_correct ?? 'N/A'}</li>
-                </ul>
-                <h3>图谱 RAG 错误:</h3>
-                <ul>
-                    <li>检索错误: ${data.graph_retrieve_error ?? 'N/A'}</li>
-                    <li>丢失错误: ${data.graph_lose_error ?? 'N/A'}</li>
-                    <li>丢失正确: ${data.graph_lose_correct ?? 'N/A'}</li>
-                </ul>
-                <h3>建议:</h3>
-                <p>${data.advice}</p>
-            `;
+        // Call the backend /generate endpoint
+        const response = await fetch("/generate", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "Accept": "application/json" },
+            body: JSON.stringify({
+                input: query,
+                session_id: currentSessionId,
+                rag_mode: ragSelect.value // Send selected RAG mode
+            }),
+            signal: abortController.signal // Pass the abort signal
+        });
+
+        if (response.ok) {
+            generatedData = await response.json();
+            console.log("Generated data received:", generatedData);
+            // Update internal state with received answers
+            updateAnswerStore(generatedData);
+            // Display the actual answers
+            displaySelectedAnswer();
+            // Refresh the history list automatically to show the new message
+            await displaySessionHistory();
+            // Scroll to and highlight the new item in history (optional)
+            const newItemElement = document.getElementById(`message-${generatedData.message_id}`);
+            if (newItemElement) {
+                newItemElement.click(); // Simulate click to load details
+                newItemElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }
+
         } else {
-            adviceContent.textContent = "收到的建议数据格式不正确。";
-            console.warn("未预期的建议数据格式", data);
+            // Handle HTTP errors (e.g., 400, 500)
+            const errorText = await response.text();
+            fetchError = new Error(`生成失败: ${response.status} ${errorText}`);
+            currentAnswers = { query: query, vector: "错误", graph: "错误", hybrid: "错误" }; // Show error state
+            displaySelectedAnswer();
         }
     } catch (error) {
-        console.error('获取建议时出错:', error);
-        adviceContent.textContent = `无法加载建议: ${error.message}`;
+        fetchError = error;
+        if (error.name === "AbortError") {
+            // Handle cancellation
+            console.log("Fetch aborted by user.");
+            currentAnswers = { query: query, vector: "已取消", graph: "已取消", hybrid: "已取消" };
+        } else {
+            // Handle other network or unexpected errors
+            console.error("Fetch /generate error:", error);
+            currentAnswers = { query: query, vector: "错误", graph: "错误", hybrid: "错误" };
+             // Update answer display with more specific error if possible
+             if (!error.message?.includes('aborted')) {
+                 currentAnswers = { query: query, vector: `错误: ${error.message}`, graph: `错误: ${error.message}`, hybrid: `错误: ${error.message}` };
+             }
+        }
+         displaySelectedAnswer(); // Display error/cancel state
+    } finally {
+        // Reset state regardless of success, failure, or cancellation
+        isGenerating = false;
+        sendButton.textContent = "Send";
+        sendButton.classList.remove("generating");
+        userInput.disabled = false;
+        // Log or alert if there was an error (and it wasn't an abort)
+        if (fetchError && fetchError.name !== "AbortError") {
+            console.error("Generation process failed:", fetchError);
+            alert(`生成过程中遇到问题: ${fetchError.message}`);
+        }
     }
-}
+});
 
-function populateSelect(selectElement, options) {
-    const currentVal = selectElement.value;
-    const defaultOptionText = `-- 请选择 ${selectElement.id.split('-')[1] || '选项'} --`;
-    selectElement.innerHTML = `<option value="">${defaultOptionText}</option>`;
-    options.forEach(option => {
-        const opt = document.createElement('option');
-        opt.value = option;
-        opt.textContent = option;
-        selectElement.appendChild(opt);
-    });
-    if (options.includes(currentVal)) {
-        selectElement.value = currentVal;
+// --- Settings Application ---
+applySettingsButton.addEventListener("click", async () => {
+    // Handles applying settings from the sidebar
+    if (!selectedDatasetName) {
+        alert("请在选择所有维度后，从列表中选择一个数据集。");
+        return;
     }
-}
+    const hop = dim1Select.value;
+    const type = dim2Select.value;
+    const entity = dim3Select.value;
+    if (!hop || !type || !entity) {
+        alert("请完整选择数据集维度 (Hops, Task, Scale)！");
+        return;
+    }
 
-function clearSelect(selectElement, keepDisabled = true) {
-    const defaultOptionText = `-- 请选择 ${selectElement.id.split('-')[1] || '选项'} --`;
-    selectElement.innerHTML = `<option value="">${defaultOptionText}</option>`;
-    selectElement.disabled = keepDisabled;
-}
+    applySettingsButton.disabled = true;
+    applySettingsButton.textContent = "应用中...";
+    adviceContent.innerHTML = "正在应用设置并加载模型..."; // Update status message
 
-// --- 数据集选择逻辑 ---
+    // Collect all settings data
+    const settingsData = {
+        dataset: { // Send dataset info
+            hop: hop,
+            type: type,
+            entity: entity,
+            dataset: selectedDatasetName,
+        },
+        model_name: modelSelect.value,
+        key: apiKeyInput.value,
+        // RAG parameters
+        top_k: parseInt(document.getElementById("top-k").value) || 5,
+        threshold: parseFloat(document.getElementById("similarity-threshold").value) || 0.8,
+        chunksize: parseInt(document.getElementById("chunk-size").value) || 128,
+        k_hop: parseInt(document.getElementById("k-hop").value) || 1,
+        max_keywords: parseInt(document.getElementById("max-keywords").value) || 10,
+        pruning: document.getElementById("pruning").value === "yes", // Convert to boolean
+        strategy: document.getElementById("strategy").value || "union",
+        vector_proportion: parseFloat(document.getElementById("vector-proportion").value) || 0.9,
+        graph_proportion: parseFloat(document.getElementById("graph-proportion").value) || 0.8
+    };
 
+    console.log("Applying settings:", settingsData);
+
+    try {
+        // Call the backend /load_model endpoint
+        const response = await fetch("/load_model", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "Accept": "application/json" },
+            body: JSON.stringify(settingsData)
+        });
+
+        const result = await response.json(); // Try parsing JSON response
+
+        if (!response.ok) {
+            // Throw error with message from backend if available
+            throw new Error(result.message || `应用设置失败: ${response.status}`);
+        }
+
+        console.log("Settings applied successfully:", result);
+        alert(result.message || "设置应用成功！"); // Show success feedback
+        adviceContent.innerHTML = "设置已应用。"; // Update status
+
+        // Optional: Fetch suggestions after applying settings
+        // await fetchAndDisplaySuggestions();
+
+    } catch (error) {
+        console.error("应用设置时发生错误:", error);
+        alert(`应用设置时出错: ${error.message}`); // Show error feedback
+        adviceContent.innerHTML = `应用设置时发生错误: ${error.message}`; // Update status
+    } finally {
+        applySettingsButton.disabled = false; // Re-enable button
+        applySettingsButton.textContent = "Apply Settings";
+    }
+});
+
+
+// --- Dataset Dimension Selection ---
 function updateDatasetSelection() {
+    // Updates the dataset selection dropdowns based on hierarchy
     const dim1Value = dim1Select.value;
     const dim2Value = dim2Select.value;
     const dim3Value = dim3Select.value;
     let datasets = [];
-    selectedDatasetName = null;
-    applySettingsButton.disabled = true;
-    selectedDatasetsList.innerHTML = '<li>请先选择以上维度...</li>';
-    if (!dim1Value) {
-        clearSelect(dim2Select);
-        clearSelect(dim3Select);
-        return;
-    }
+    selectedDatasetName = null; // Reset selected dataset name
+    applySettingsButton.disabled = true; // Disable apply button until a dataset is clicked
+    selectedDatasetsList.innerHTML = '<li>请先选择以上维度...</li>'; // Reset dataset list
+
+    // --- Logic to populate dim2, dim3 based on dim1, dim2 values ---
+    // (This part remains the same as your original logic)
+    if (!dim1Value) { clearSelect(dim2Select); clearSelect(dim3Select); return; }
     try {
         let level1 = datasetHierarchy[dim1Value];
         if (!level1) { clearSelect(dim2Select); clearSelect(dim3Select); selectedDatasetsList.innerHTML = '<li>无效的 Hops 选择。</li>'; return; }
@@ -249,13 +408,14 @@ function updateDatasetSelection() {
         if (!dim3Value) { selectedDatasetsList.innerHTML = '<li>请选择 Scale...</li>'; return; }
         let level3 = level2[dim3Value];
         if (level3 === undefined) { selectedDatasetsList.innerHTML = '<li>无效的 Scale 选择。</li>'; return; }
-        datasets = level3;
-    } catch (e) {
-        console.error("导航数据集层级时出错:", e);
-        datasets = []; selectedDatasetsList.innerHTML = '<li>选择出错。</li>'; return;
-    }
+        datasets = level3; // datasets is the array of dataset names
+    } catch (e) { console.error("导航数据集层级时出错:", e); datasets = []; selectedDatasetsList.innerHTML = '<li>选择出错。</li>'; return; }
+    // --- End population logic ---
+
+    // Display the list of selectable datasets
     if (Array.isArray(datasets) && datasets.length > 0) {
-        selectedDatasetsList.innerHTML = datasets.map(ds => `<li class="dataset-option" data-dataset-name="${ds}" id="${ds}">${ds}</li>`).join('');
+        selectedDatasetsList.innerHTML = datasets.map(ds => `<li class="dataset-option" data-dataset-name="${ds}">${ds}</li>`).join('');
+        // Add click listener to each dataset list item
         selectedDatasetsList.querySelectorAll('.dataset-option').forEach(item => item.addEventListener('click', handleDatasetOptionClick));
         selectedDatasetsList.insertAdjacentHTML('afterbegin', '<li>请点击选择一个数据集:</li>');
     } else {
@@ -264,734 +424,528 @@ function updateDatasetSelection() {
 }
 
 function handleDatasetOptionClick(event) {
+    // Handles clicking on a dataset name in the list
     const li = event.currentTarget;
     const datasetName = li.dataset.datasetName;
+
+    // Remove highlight from previously selected item
     const currentlySelected = selectedDatasetsList.querySelector('.selected-dataset');
     if (currentlySelected) { currentlySelected.classList.remove('selected-dataset'); }
+
+    // Highlight the newly selected item
     li.classList.add('selected-dataset');
-    selectedDatasetName = datasetName;
+    selectedDatasetName = datasetName; // Store the selected name
     console.log("选择的数据集:", selectedDatasetName);
-    applySettingsButton.disabled = false;    
-    fetch('/list-history', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ selectedDatasetName })
-    })
-    .then(response => response.json())
-    .then(data => {
-        sessionsList = data.files || [];
-        console.log("✅ sessionsList 已更新:", sessionsList);
 
-        if (sessionsList.length === 0) {
-            alert("未找到历史记录文件");
-        }
-
-        // 初始化 historySessions，只设为 { 文件名: [] }
-        historySessions = {};
-        sessionsList.forEach(name => {
-            historySessions[name] = [];
-        });
-
-        // 设置当前会话名（优先使用当前数据集名）
-        currentHistorySessionName = sessionsList.includes(selectedDatasetName)
-            ? selectedDatasetName
-            : sessionsList[0];
-
-        console.log("📘 初始化完成的 historySessions:", historySessions);
-        console.log("📌 当前会话名称:", currentHistorySessionName);
-
-        // 可选：自动更新 UI
-        populateSessionDropdown();
-        displaySessionHistory();
-    })
-    .catch(error => {
-        console.error("❌ 获取历史列表失败:", error);
-    });
+    // Enable the 'Apply Settings' button now that a dataset is chosen
+    applySettingsButton.disabled = false;
 }
 
-// --- 历史会话管理 ---
-
-async function initializeHistory() {
-    if (USE_BACKEND_HISTORY) {
-        console.log("从后端初始化历史记录...");
-        // await fetchSessionsAPI();
-        await populateSessionDropdown();
-        await displaySessionHistory();
+// --- Helper functions for dataset dropdowns (Keep as is) ---
+function populateSelect(selectElement, options) {
+    const currentVal = selectElement.value;
+    const defaultOptionText = selectElement.options[0]?.textContent || `-- 请选择 --`; // Preserve default text
+    selectElement.innerHTML = `<option value="">${defaultOptionText}</option>`; // Reset with default
+    options.forEach(option => {
+        const opt = document.createElement('option');
+        opt.value = option;
+        opt.textContent = option;
+        selectElement.appendChild(opt);
+    });
+    // Restore previous selection if still valid
+    if (options.includes(currentVal)) {
+        selectElement.value = currentVal;
     } else {
-        console.log("从本地模拟数据初始化历史记录...");
-        populateSessionDropdown();
-        displaySessionHistory();
+        selectElement.value = ""; // Reset if previous value is no longer valid
     }
 }
+function clearSelect(selectElement, keepDisabled = true) {
+    const defaultOptionText = selectElement.options[0]?.textContent || `-- 请选择 --`;
+    selectElement.innerHTML = `<option value="">${defaultOptionText}</option>`;
+    selectElement.disabled = keepDisabled;
+}
 
-async function fetchSessionsAPI() {
-    // #backend-integration: GET /api/sessions
-    console.log("(API 模式) 正在获取会话列表...");
+// --- History / Session Management ---
+
+async function fetchUserSessions() {
+    // Fetches the list of chat sessions for the logged-in user
+    console.log("Fetching user sessions...");
     try {
-        //之前写的获取函数
-        // const response = await fetch('/api/sessions'); // 实际 Fetch
-        // 模拟返回
-        const response = { ok: true, json: async () => ([{id: 'backend-uuid-1', name: 'Backend Session 1'}, {id: 'backend-uuid-2', name: 'Backend Session 2'}]) };
-        if (!response.ok) throw new Error(`获取失败: ${response.status}`);
-        sessionsList = await response.json();
-        console.log("(API 模式) 会话列表已加载:", sessionsList);
+        const response = await fetch('/api/sessions'); // GET request to list sessions
+        if (!response.ok) throw new Error(`Failed to fetch sessions: ${response.status}`);
+        sessionsList = await response.json(); // Expecting [{id, name, create_time}, ...]
+        console.log("Sessions loaded:", sessionsList);
+        populateSessionDropdown();
+
+        // Automatically select the first session if available
+        if (sessionsList.length > 0) {
+             // Default to the first session in the list (which should be the most recent if backend sorts)
+             currentSessionId = sessionsList[0].id;
+             historySessionSelect.value = currentSessionId; // Update dropdown display
+             await displaySessionHistory(); // Load history for the selected session
+        } else {
+            // Handle case where user has no sessions yet
+            currentSessionId = null;
+            historySessionSelect.innerHTML = '<option value="">无会话</option>';
+            questionList.innerHTML = '<li class="no-history-item">无可用会话。请创建一个新会话开始。</li>';
+        }
     } catch (error) {
-        console.error("(API 模式) 获取会话列表时出错:", error);
-        sessionsList = [];
-        historySessionSelect.innerHTML = '<option value="">加载会话出错</option>';
+        console.error("Error fetching sessions:", error);
+        historySessionSelect.innerHTML = '<option value="">加载出错</option>';
+        questionList.innerHTML = `<li class="no-history-item">加载会话列表出错: ${error.message}</li>`;
     }
 }
 
 function populateSessionDropdown() {
-    historySessionSelect.innerHTML = '';
-    if (USE_BACKEND_HISTORY) {
-        console.log("(API 模式) 正在根据 API 数据填充下拉菜单");
-        if (sessionsList.length === 0) { historySessionSelect.innerHTML = '<option value="">无可用会话</option>'; return; }
-        sessionsList.forEach(session => {
-            const option = document.createElement('option');
-            option.value = session; option.textContent = session; historySessionSelect.appendChild(option);
-        });
-        if (currentSession && sessionsList.includes(currentSession)) {
-            // 如果 currentSession 存在并且在 sessionsList 中，设置为选中项
-            historySessionSelect.value = currentSession;
-        } else if (sessionsList.length > 0) {
-            // 如果 currentSession 不存在或者不在 sessionsList 中，默认选择第一个会话
-            currentSession = sessionsList[0];
-            historySessionSelect.value = currentSession;
-        } else {
-            // 如果 sessionsList 为空，清空 currentSession
-            currentSession = null;
-        }
-        
-        console.log("(API 模式) 下拉菜单已填充，当前会话:", currentSession);
-    } else {
-        console.log("(本地模式) 正在根据本地数据填充下拉菜单");
-        const sessionNames = Object.keys(historySessions);
-        if (sessionNames.length === 0) { historySessionSelect.innerHTML = '<option value="">无可用会话</option>'; return; }
-        sessionNames.forEach(name => {
-            const option = document.createElement('option');
-            option.value = name; option.textContent = name; historySessionSelect.appendChild(option);
-        });
-        if (!historySessions.hasOwnProperty(currentHistorySessionName) && sessionNames.length > 0) { currentHistorySessionName = sessionNames[0]; }
-        else if (sessionNames.length === 0) { currentHistorySessionName = null; }
-        if (currentHistorySessionName) { historySessionSelect.value = currentHistorySessionName; }
-         console.log("(本地模式) 下拉菜单已填充，当前会话:", currentHistorySessionName);
-    }
-}
-
-async function displaySessionHistory() {
-    questionList.innerHTML = '<li class="no-history-item">正在加载历史记录...</li>';
-    let items = [];
-
-    if (USE_BACKEND_HISTORY) {
-        const session = currentSession;
-        const datasetName = selectedDatasetName;
-
-        if (!session || !datasetName) {
-            questionList.innerHTML = '<li class="no-history-item">请选择一个会话。</li>';
-            return;
-        }
-
-        console.log(`(API 模式) 正在为会话获取历史记录: ${session}`);
-
-        try {
-            // 发起后端请求
-            const response = await fetch(`/api/sessions/history?dataset=${encodeURIComponent(datasetName)}&session=${encodeURIComponent(session)}`, {
-                method: 'GET',
-                headers: {
-                    'Content-Type': 'application/json'
-                }
-            });
-
-            if (!response.ok) throw new Error(`获取失败: ${response.status}`);
-
-            items = await response.json();
-            console.log(`(API 模式) 获取到 ${items.length} 条历史记录。`);
-
-        } catch (error) {
-            console.error(`(API 模式) 获取会话 ${session} 的历史记录时出错:`, error);
-            questionList.innerHTML = `<li class="no-history-item">加载历史记录出错: ${error.message}</li>`;
-            return;
-        }
-
-    } else {
-        // 本地模式
-        const sessionName = currentHistorySessionName;
-        if (!sessionName || !historySessions[sessionName]) {
-            questionList.innerHTML = '<li class="no-history-item">请选择一个有效的会话。</li>';
-            return;
-        }
-
-        console.log(`(本地模式) 正在显示本地会话的历史记录: ${sessionName}`);
-        items = (historySessions[sessionName] || []).slice().sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-        console.log(`(本地模式) 找到 ${items.length} 条历史记录。`);
-    }
-
-    // 清空列表准备填充历史记录
-    questionList.innerHTML = '';
-
-    if (items.length === 0) {
-        questionList.innerHTML = '<li class="no-history-item">此会话尚无历史记录。</li>';
+    // Fills the session dropdown (#history-session-select)
+    historySessionSelect.innerHTML = ''; // Clear existing options
+    if (sessionsList.length === 0) {
+        historySessionSelect.innerHTML = '<option value="">无会话</option>';
         return;
     }
+    // Sort sessions by create_time descending if backend didn't already
+    // sessionsList.sort((a, b) => new Date(b.create_time) - new Date(a.create_time));
 
-    // 渲染每条历史记录
-    items.forEach(item => {
-        const div = document.createElement('div');
-        div.classList.add('question-item');
-        div.id = `history-${item.id}`;
-        div.dataset.itemId = item.id;
-
-        // 设置背景颜色
-        let backgroundColor = '#f0f0f0';
-        switch (item.type?.toUpperCase()) {
-            case 'GREEN': backgroundColor = '#d9f7be'; break;
-            case 'RED': backgroundColor = '#ffccc7'; break;
-            case 'YELLOW': backgroundColor = '#fff2e8'; break;
-        }
-        div.style.backgroundColor = backgroundColor;
-
-        const answerSnippet = item.answer ? item.answer.substring(0, 30) + '...' : '';
-        current_vector_response = item.vector_response
-        current_graph_response = item.graph_response
-        current_hybrid_response = item.hybrid_response
-        div.innerHTML = `
-            <p>ID: ${item.id}</p>
-            <p>Query: ${item.query || 'N/A'}</p>
-            <p>V::${item.vector_response}</p>
-            <p>G:${item.graph_response}</p>
-            <p>H:${item.hybrid_response}</p>
-            ${answerSnippet ? `<p>Ans: ${answerSnippet}</p>` : ''}
-        `;
-
-        div.addEventListener('click', handleHistoryItemClick);
-        questionList.appendChild(div);
+    sessionsList.forEach(session => {
+        const option = document.createElement('option');
+        option.value = session.id; // Use session ID as the value
+        option.textContent = session.name; // Display session name
+        historySessionSelect.appendChild(option);
     });
-}
 
-async function handleConfirmNewSession() {
-    const name = newSessionNameInput.value.trim();
-
-    // 检查会话名称是否为空
-    if (name === "") {
-        console.warn("会话名称不能为空。");
-        newSessionNameInput.focus();
-        return;
-    }
-
-    // 隐藏输入框
-    hideNewSessionInput();
-
-    // 如果是使用后端创建会话
-    if (USE_BACKEND_HISTORY) {
-        console.log(`(API 模式) 尝试通过 API 创建新会话: ${name}`);
-
-        try {
-            // 实际请求后端创建会话
-            const response = await fetch('/create-history-session', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    sessionName: name,
-                    datasetName: selectedDatasetName
-                })
-            });
-
-            // 检查请求是否成功
-            if (!response.ok) throw new Error(`创建失败: ${response.status}`);
-
-            // 解析响应
-            const createdSession = await response.json();
-            console.log("(API 模式) 新会话已创建:", createdSession);
-
-            // 获取并刷新会话数据
-            // await fetchSessionsAPI();
-            currentHistorySessionName = createdSession.name;
-
-            // 更新 UI
-            await populateSessionDropdown();
-            await displaySessionHistory();
-        } catch (error) {
-            console.error("(API 模式) 创建新会话时出错:", error);
-            alert(`通过 API 创建会话失败: ${error.message}`);
-        }
-
+    // Ensure the dropdown reflects the currently selected session ID
+    if (currentSessionId && sessionsList.some(s => s.id === currentSessionId)) {
+        historySessionSelect.value = currentSessionId;
+    } else if (sessionsList.length > 0) {
+         // If no valid currentSessionId, default to the first in the list
+         currentSessionId = sessionsList[0].id;
+         historySessionSelect.value = currentSessionId;
     } else {
-        // 如果是本地模式
-        console.log(`(本地模式) 尝试创建本地会话: ${name}`);
-
-        let newName = name;
-        let counter = 1;
-        const baseName = newName;
-
-        // 确保会话名称唯一
-        while (historySessions.hasOwnProperty(newName)) {
-            newName = `${baseName} ${counter}`;
-            counter++;
-        }
-
-        console.log(`(本地模式) 创建本地会话: ${newName}`);
-
-        // 在本地添加新会话
-        historySessions[newName] = [];
-        currentHistorySessionName = newName;
-
-        // 更新 UI
-        populateSessionDropdown();
-        displaySessionHistory();
+        currentSessionId = null; // No sessions available
     }
 }
 
-async function addInteractionToHistory(query, answer, type = 'INFO', details = {}) {
-    const historyItemData = {
-        query: query, answer: answer, type: type,
-        details: { vectorAnswer: details.vectorAnswer || '', graphAnswer: details.graphAnswer || '', hybridAnswer: details.hybridAnswer || '' }
-    };
-    if (USE_BACKEND_HISTORY) {
-        const session = currentSession;
-        if (!session) { console.error("(API 模式) 无法添加到历史: 未选择会话。"); return null; }
-        console.log(`(API 模式) 正在添加交互到会话 ${session}`);
-        // #backend-integration: POST /api/sessions/${sessionId}/history
-         try {
-             // const response = await fetch(`/api/sessions/${sessionId}/history`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(historyItemData) }); // 实际 Fetch
-             // 模拟成功
-             const savedItem = { ...historyItemData, id: `item-be-${Date.now()}-${session}`, timestamp: new Date().toISOString() };
-             const response = { ok: true, json: async () => savedItem };
-             if (!response.ok) throw new Error(`保存失败: ${response.status}`);
-             const returnedItem = await response.json();
-             console.log("(API 模式) 历史项已保存:", returnedItem);
-             await displaySessionHistory();
-             return returnedItem.id;
-         } catch (error) { console.error("(API 模式) 添加交互到历史时出错:", error); return null; }
-    } else {
-        const sessionName = currentHistorySessionName;
-        if (!sessionName) { console.error("(本地模式) 无法添加到历史: 未选择会话。"); return null; }
-        console.log(`(本地模式) 正在本地添加交互到会话 ${sessionName}`);
-        const localItemId = `item-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-        const timestamp = new Date().toISOString();
-        const newItem = { ...historyItemData, id: localItemId, timestamp: timestamp };
-        if (!historySessions[sessionName]) { historySessions[sessionName] = []; }
-        historySessions[sessionName].push(newItem);
-        displaySessionHistory();
-        return localItemId;
-    }
-}
+historySessionSelect.addEventListener('change', async (event) => {
+    // Handles changing the selected session in the dropdown
+    const selectedId = parseInt(event.target.value); // Ensure ID is number if needed
+    if (selectedId && selectedId !== currentSessionId) {
+        currentSessionId = selectedId;
+        console.log("Session changed to ID:", currentSessionId);
+        await displaySessionHistory(); // Load history for the newly selected session
 
-newSessionNameInput.addEventListener('keydown', function (event) {
-    if (event.key === 'Enter') {
-        const sessionName = newSessionNameInput.value.trim();
-
-        if (!sessionName) {
-            alert("请输入会话名称！");
-            return;
-        }
-
-        // 发起创建新历史文件请求
-        fetch('/create-history-session', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ sessionName, datasetName: selectedDatasetName })
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                console.log(`✅ 已创建新历史会话文件: ${sessionName}`);
-
-                // 更新本地 session 结构
-                historySessions[sessionName] = [];
-                history_list.push(sessionName);
-                currentHistorySessionName = sessionName;
-
-                // 更新 UI
-                populateSessionDropdown();
-                displaySessionHistory();
-                hideNewSessionInput();
-            } else {
-                alert("❌ 创建失败：" + data.message);
-            }
-        })
-        .catch(err => {
-            console.error("❌ 创建会话时出错:", err);
-            alert("创建失败，请稍后重试！");
-        });
+        // Clear main answer/retrieval areas when switching sessions
+        currentAnswers = { query: "", vector: "", graph: "", hybrid: "" };
+        displaySelectedAnswer();
+        clearRetrievalResults();
+        currentMessageId = null; // Reset selected message ID
     }
 });
 
+async function displaySessionHistory() {
+    // Fetches and displays messages for the currentSessionId
+    if (!currentSessionId) {
+        questionList.innerHTML = '<li class="no-history-item">请先选择一个会话。</li>';
+        return;
+    }
+    questionList.innerHTML = '<li class="no-history-item">正在加载历史记录...</li>';
+    console.log(`Workspaceing history for session ID: ${currentSessionId}`);
+
+    try {
+        // Call backend API to get messages for the selected session
+        const response = await fetch(`/api/sessions/${currentSessionId}/history`);
+        if (!response.ok) {
+            const errData = await response.json().catch(() => ({}));
+            throw new Error(errData.error || `获取历史记录失败: ${response.status}`);
+        }
+        const messages = await response.json(); // Expecting array of message objects from backend
+        console.log(`Loaded ${messages.length} messages for session ${currentSessionId}`);
+
+        questionList.innerHTML = ''; // Clear loading/previous messages
+
+        if (messages.length === 0) {
+            questionList.innerHTML = '<li class="no-history-item">此会话尚无历史记录。</li>';
+            return;
+        }
+
+        // Render each message item (consider ordering - backend likely sends oldest first)
+        messages.forEach(item => { // Display oldest first, newest at bottom
+            const div = document.createElement('div');
+            div.classList.add('question-item'); // Use existing CSS class
+            div.id = `message-${item.id}`; // Unique ID for the message item element
+            div.dataset.messageId = item.id; // Store message ID for easy access on click
+
+            // Display query and a short answer snippet
+            const answerSnippet = (item.hybrid_response || item.vector_response || item.graph_response || "...")?.substring(0, 30) + '...';
+            // Format timestamp nicely
+             const timestamp = new Date(item.timestamp).toLocaleString(); // Use local time format
+
+            // Store full answers in hidden spans within the element for quick display on click
+            div.innerHTML = `
+                <p class="history-query">问: ${item.query || 'N/A'}</p>
+                <p class="history-answer">答: ${answerSnippet}</p>
+                <p class="history-timestamp">${timestamp}</p>
+                <span hidden class="data-vector">${item.vector_response || ''}</span>
+                <span hidden class="data-graph">${item.graph_response || ''}</span>
+                <span hidden class="data-hybrid">${item.hybrid_response || ''}</span>
+            `;
+
+            // Optional: Add styling based on message type/status if that data exists
+            // switch (item.type?.toUpperCase()) { /* ... add background color logic ... */ }
+
+            div.addEventListener('click', handleHistoryItemClick); // Add click handler
+            questionList.appendChild(div);
+        });
+         // Scroll history list to the bottom (most recent message)
+         questionList.scrollTop = questionList.scrollHeight;
+
+    } catch (error) {
+        console.error(`获取会话 ${currentSessionId} 历史记录时出错:`, error);
+        questionList.innerHTML = `<li class="no-history-item">加载历史记录出错: ${error.message}</li>`;
+    }
+}
+
+// --- New Session Creation ---
+newHistorySessionButton.addEventListener('click', showNewSessionInput);
+cancelNewSessionButton.addEventListener('click', hideNewSessionInput);
+
+newSessionNameInput.addEventListener('keydown', (event) => {
+    // Allow creating session on Enter key
+    if (event.key === 'Enter') {
+        event.preventDefault(); // Prevent form submission if it were inside a form
+        handleConfirmNewSession();
+    } else if (event.key === 'Escape') {
+        // Allow canceling with Escape key
+        hideNewSessionInput();
+    }
+});
 
 function showNewSessionInput() {
-    // if (isAddingNewSession) return;
-    isAddingNewSession = true;
-    newHistorySessionButton.style.display = 'none';
-    newSessionInputContainer.style.display = 'inline-flex';
-    newSessionNameInput.value = '';
-    newSessionNameInput.focus();
+    // Shows the input field for creating a new session name
+    newHistorySessionButton.style.display = 'none'; // Hide the '+' button
+    newSessionInputContainer.style.display = 'inline-flex'; // Show the input container
+    newSessionNameInput.value = ''; // Clear previous input
+    newSessionNameInput.focus(); // Focus the input field
 }
 function hideNewSessionInput() {
-    isAddingNewSession = false;
+    // Hides the input field and shows the '+' button again
     newSessionInputContainer.style.display = 'none';
     newHistorySessionButton.style.display = 'inline-block';
 }
 
-// --- 核心交互逻辑 ---
-
-sendButton.addEventListener("click", async () => {
-    if (!isGenerating) {
-        const query = userInput.value.trim(); if (!query) { console.warn("请输入查询内容。"); return; }
-        sendButton.textContent = "生成中..."; sendButton.disabled = true; isGenerating = true;
-        abortController = new AbortController(); let signal = abortController.signal;
-        currentAnswers = { query: query, vector: "", graph: "", hybrid: "" }; displaySelectedAnswer();
-        let generatedData = {}; let historyItemType = 'RED'; let historyItemAnswer = '生成过程中出错'; let fetchError = null;
-        try {
-            // #backend-integration: POST /generate
-            const response = await fetch("/generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ input: query }), signal: signal });
-            if (response.ok) { generatedData = await response.json(); updateAnswerStore(generatedData); displaySelectedAnswer(); historyItemType = 'GREEN'; historyItemAnswer = currentAnswers[ragSelect.value] || generatedData.vectorAnswer || "N/A"; }
-            else { const errorText = await response.text(); historyItemAnswer = `错误: ${errorText}`; fetchError = new Error(`网络响应不成功: ${response.status} ${errorText}`); currentAnswers = { query: query, vector: "错误", graph: "错误", hybrid: "错误" }; displaySelectedAnswer(); }
-        } catch (error) { fetchError = error; if (error.name === "AbortError") { console.log("用户中止了 Fetch 请求。"); historyItemAnswer = "生成已取消"; historyItemType = 'YELLOW'; } else { console.error("Fetch 错误:", error); currentAnswers = { query: query, vector: "错误", graph: "错误", hybrid: "错误" }; displaySelectedAnswer(); if (!error.message?.includes('Network response')) { historyItemAnswer = `错误: ${error.message || '未知 Fetch 错误'}`; } } }
-        finally {
-            await addInteractionToHistory(query, historyItemAnswer, historyItemType, { vectorAnswer: generatedData.vectorAnswer || currentAnswers.vector, graphAnswer: generatedData.graphAnswer || currentAnswers.graph, hybridAnswer: generatedData.hybridAnswer || currentAnswers.hybrid });
-            sendButton.textContent = "Send"; sendButton.disabled = false; isGenerating = false; if (fetchError && fetchError.name !== "AbortError") { console.error("生成失败:", fetchError); }
-        }
-    } else { abortController.abort(); }
-});
-
-applySettingsButton.addEventListener("click", async () => {
-    if (!selectedDatasetName) { 
-        alert("请在选择所有维度后，从列表中选择一个数据集。"); 
-        return; 
-    }
-    const hop = document.getElementById("dim1-hops").value;
-    const type = document.getElementById("dim2-task").value;
-    const entity = document.getElementById("dim3-scale").value;
-    if (!hop || !type || !entity ||!selectedDatasetName) {
-        alert("请完整选择三个下拉框的内容！");
+async function handleConfirmNewSession() {
+    // Creates a new session via backend API
+    const name = newSessionNameInput.value.trim();
+    if (name === "") {
+        alert("请输入会话名称。");
+        newSessionNameInput.focus();
         return;
     }
-        // try {
-    const postData = {
-        hop: hop,
-        type: type,
-        entity: entity,
-        dataset: selectedDatasetName,
-        session: currentSession
-    };
-    // try {
-    //     const postData = {
-    //         hop: hop,
-    //         type: type,
-    //         entity: entity,
-    //         dataset: selectedDatasetName
-    //     };
-    //     fetch('/get-dataset', {
-    //         method: 'POST',
-    //         headers: {
-    //             'Content-Type': 'application/json'
-    //         },
-    //         body: JSON.stringify(postData)
-    //     }).catch(error => {
-    //         console.error("请求失败:", error);
-    //     });    
-    applySettingsButton.disabled = true; 
-    applySettingsButton.textContent = "应用中..."; 
-    adviceContent.innerHTML = "正在加载建议...";
+    hideNewSessionInput(); // Hide input immediately
+    console.log(`Attempting to create new session: ${name}`);
 
-
-    
-    const settingsData = { 
-        dataset: postData,
-        model_name: modelSelect.value, 
-        key: apiKeyInput.value, 
-        top_k: parseInt(document.getElementById("top-k").value) || 5, 
-        threshold: parseFloat(document.getElementById("similarity-threshold").value) || 0.8, 
-        chunksize: parseInt(document.getElementById("chunk-size").value) || 128, 
-        k_hop: parseInt(document.getElementById("k-hop").value) || 1, 
-        max_keywords: parseInt(document.getElementById("max-keywords").value) || 10, 
-        pruning: document.getElementById("pruning").value === "yes", 
-        strategy: document.getElementById("strategy").value || "union", 
-        vector_proportion: parseFloat(document.getElementById("vector-proportion").value) || 0.9, 
-        graph_proportion: parseFloat(document.getElementById("graph-proportion").value) || 0.8 
-    };
-    
-    console.log("正在应用设置:", settingsData);
-    
     try {
-        // 修复1: 直接使用 fetch 和 await，不需要 Promise.allSettled
-        const response = await fetch("/load_model", { 
-            method: "POST", 
-            headers: { "Content-Type": "application/json" }, 
-            body: JSON.stringify(settingsData) 
+        // Call the backend API to create the session
+        const response = await fetch('/api/sessions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', "Accept": "application/json" },
+            body: JSON.stringify({ sessionName: name }) // Backend expects 'sessionName'
         });
-        
-        if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(`应用设置失败: ${response.status} ${errorText}`);
-        }
-        
-        const result = await response.json();
-        console.log("设置应用成功:", result);
-        
-        // 可以在这里调用 fetchAndDisplaySuggestions() 如果需要
-        // await fetchAndDisplaySuggestions();
-        
-    } catch (error) { 
-        console.error("应用设置时发生错误:", error); 
-        alert(`发生错误: ${error.message}`); 
-        adviceContent.innerHTML = `应用设置时发生错误: ${error.message}`; 
-    } finally { 
-        applySettingsButton.disabled = false; 
-        applySettingsButton.textContent = "Apply Settings"; 
-    }
-});
+        const newSession = await response.json(); // Get the created session details {id, name, ...}
 
-// --- 检索结果显示逻辑 ---
+        if (!response.ok) {
+            // Handle creation failure
+            throw new Error(newSession.error || `创建会话失败: ${response.status}`);
+        }
+
+        console.log("New session created:", newSession);
+        // Refresh the session list in the dropdown
+        await fetchUserSessions();
+        // Automatically select the newly created session
+        currentSessionId = newSession.id;
+        historySessionSelect.value = currentSessionId;
+        // Display the (empty) history for the new session
+        await displaySessionHistory();
+        // Clear main answer area for the new session
+        currentAnswers = { query: "", vector: "", graph: "", hybrid: "" };
+        displaySelectedAnswer();
+        clearRetrievalResults();
+
+    } catch (error) {
+        console.error("创建新会话时出错:", error);
+        alert(`创建会话失败: ${error.message}`);
+        // Consider showing the input again if creation fails?
+        // showNewSessionInput();
+    }
+}
+
+// --- Retrieval Result Display ---
 
 async function handleHistoryItemClick(event) {
-     const div = event.currentTarget; const itemId = div.dataset.itemId; if (!itemId) return;
-     let clickedItemData = null; let queryText = 'Loading...';
+    // Handles clicking on a message item in the history list
+    const div = event.currentTarget;
+    const messageId = div.dataset.messageId; // Get message ID from the clicked element
+    if (!messageId) {
+        console.warn("Clicked history item missing message ID.");
+        return;
+    }
 
-     if (USE_BACKEND_HISTORY) {
-         queryText = div.querySelector('p:nth-of-type(2)')?.textContent.replace('Query: ', '') || 'Loading...';
-         // #backend-integration: Optionally fetch full item details from backend if needed
-         // For now, assume we only have ID and query from the list item
-         clickedItemData = { id: itemId, query: queryText,vector_response:  current_vector_response,graph_response:  current_graph_response,hybrid_response:  current_hybrid_response}; // Minimal data
-         console.log(`(API 模式) 历史项被点击: ID ${itemId}`);
-     } else {
-         const sessionName = currentHistorySessionName;
-         if (!sessionName || !historySessions[sessionName]) { console.error("本地会话未找到"); return; }
-         clickedItemData = historySessions[sessionName].find(item => item.id === itemId);
-         if (!clickedItemData) { console.error(`无法找到本地项 ID: ${itemId}`); return; }
-         queryText = clickedItemData.query;
-         console.log(`(本地模式) 本地历史项被点击:`, clickedItemData);
-     }
+    currentMessageId = messageId; // Keep track of the currently selected message
 
-     document.querySelectorAll('.question-item.selected').forEach(el => el.classList.remove('selected')); div.classList.add('selected');
-     vectorContent.innerHTML = '正在加载向量细节...'; if (currentCytoscapeInstance) { currentCytoscapeInstance.destroy(); currentCytoscapeInstance = null; } cyContainer.innerHTML = ''; const cyGraphDiv = document.createElement('div'); cyGraphDiv.id = 'cy'; cyGraphDiv.innerHTML = '<p>正在加载图谱...</p>'; cyContainer.appendChild(cyGraphDiv);
+    // Highlight the selected item in the history list
+    document.querySelectorAll('.question-item.selected').forEach(el => el.classList.remove('selected'));
+    div.classList.add('selected');
 
-     // Update answer display using data found (either from local store or minimal API data)
-     updateAnswerStore(clickedItemData); displaySelectedAnswer();
+    console.log(`History item clicked, Message ID: ${messageId}`);
 
-     // #backend-integration: GET /get-vector/${itemId} 和 GET /get-graph/${itemId}
-     // Backend needs to handle UUIDs if USE_BACKEND_HISTORY=true, or mock/local IDs if false
-     let vectorResponse, graphResponse;
-     try { console.log(`正在为项 ID 获取细节: ${itemId}`); [vectorResponse, graphResponse] = await Promise.all([ fetch(`/get-vector/${itemId}?sessionName=${encodeURIComponent(currentSession)}&datasetName=${encodeURIComponent(selectedDatasetName)}`), fetch(`/get-graph/${itemId}?sessionName=${encodeURIComponent(currentSession)}&datasetName=${encodeURIComponent(selectedDatasetName)}`) ]);
+    // --- Update Main Answer Display ---
+    // Retrieve the full query and answers stored within the clicked element
+    const queryText = div.querySelector('.history-query')?.textContent.replace('问: ', '') || 'N/A';
+    currentAnswers.query = queryText;
+    currentAnswers.vector = div.querySelector('.data-vector')?.textContent || '';
+    currentAnswers.graph = div.querySelector('.data-graph')?.textContent || '';
+    currentAnswers.hybrid = div.querySelector('.data-hybrid')?.textContent || '';
+    displaySelectedAnswer(); // Update the main chat display area
+    // --- End Answer Display Update ---
+
+
+    // --- Fetch and Display Detailed Retrieval Results (Vector/Graph) ---
+    clearRetrievalResults(true); // Show loading state in retrieval areas
+
+    try {
+        // Fetch vector and graph details concurrently using the message ID
+        const [vectorResponse, graphResponse] = await Promise.all([
+            fetch(`/get-vector/${messageId}`), // API expects message ID
+            fetch(`/get-graph/${messageId}`)  // API expects message ID
+        ]);
+
+        // Process Vector Results
         if (vectorResponse.ok) {
-            const d = await vectorResponse.json(); // 解析返回的 JSON 数据
-            if (d?.chunks && Array.isArray(d.chunks)) {
-                // 如果 chunks 存在并且是一个数组，渲染每个 chunk
-                vectorContent.innerHTML = d.chunks.map((c, i) => {
-                    return `<div class="retrieval-result-item">
-                                <p><b>Chunk ${i + 1}:</b> ${c || 'N/A'}</p>
-                            </div>`;
-                }).join('');  // 拼接成一个字符串并设置为 innerHTML
+            const vectorData = await vectorResponse.json(); // Expecting { id: ..., chunks: [...] }
+             // Check if chunks exist and is an array
+            if (vectorData?.chunks && Array.isArray(vectorData.chunks)) {
+                if (vectorData.chunks.length > 0) {
+                    vectorContent.innerHTML = vectorData.chunks.map((chunkData, i) => {
+                        // Adapt based on the actual structure of items in the chunks array
+                        const chunkText = (typeof chunkData === 'string') ? chunkData : (chunkData.chunk || JSON.stringify(chunkData)); // Example handling
+                        return `<div class="retrieval-result-item">
+                                    <p><b>Chunk ${i + 1}:</b> ${chunkText || 'N/A'}</p>
+                                </div>`;
+                    }).join('');
+                } else {
+                     vectorContent.innerHTML = '<p>未找到相关向量块。</p>';
+                }
             } else {
-                vectorContent.innerHTML = '<p>未找到向量块。</p>';
+                 console.warn("Vector data received, but 'chunks' array is missing or not an array:", vectorData);
+                 vectorContent.innerHTML = '<p>向量数据格式不正确。</p>';
             }
         } else {
-            // 如果请求失败，显示错误信息
-            const t = await vectorResponse.text();
-            vectorContent.innerHTML = `<p>向量错误 ${vectorResponse.status}: ${t}</p>`;
-            console.error(`向量 Fetch 失败: ${t}`);
+            // Handle vector fetch error
+            const errorText = await vectorResponse.text();
+            vectorContent.innerHTML = `<p>加载向量数据出错 ${vectorResponse.status}: ${errorText}</p>`;
+            console.error(`Vector fetch failed (${messageId}): ${errorText}`);
         }
-         if (graphResponse.ok) { const d = await graphResponse.json(); if (d?.nodes || d?.edges) { renderCytoscapeGraph(d); } else { cyGraphDiv.innerHTML = '<p>未找到图谱数据。</p>'; } } else { const t = await graphResponse.text(); cyGraphDiv.innerHTML = `<p>图谱错误 ${graphResponse.status}: ${t}</p>`; console.error(`图谱 Fetch 失败: ${t}`);}
-     } catch (error) { console.error(`为项 ${itemId} 获取细节时出错:`, error); if (!vectorResponse?.ok) vectorContent.innerHTML = `<p>加载向量细节失败。 ${error.message}</p>`; if (!graphResponse?.ok) cyGraphDiv.innerHTML = `<p>加载图谱细节失败。 ${error.message}</p>`; }
+
+        // Process Graph Results
+         if (graphResponse.ok) {
+            const graphData = await graphResponse.json(); // Expecting Cytoscape JSON { nodes: [...], edges: [...] }
+             // Check if graphData is valid before rendering
+            if (graphData && (Array.isArray(graphData.nodes) || Array.isArray(graphData.edges))) {
+                 if (graphData.nodes.length > 0 || graphData.edges.length > 0) {
+                    renderCytoscapeGraph(graphData); // Call rendering function
+                 } else {
+                     if (cyContainer) cyContainer.innerHTML = '<p>未找到相关图谱数据 (节点/边为空)。</p>';
+                 }
+            } else {
+                 // Handle cases where response is OK but data format is wrong
+                 console.warn("Received unexpected graph data format:", graphData);
+                 if (cyContainer) cyContainer.innerHTML = '<p>返回的图谱数据格式不正确。</p>';
+            }
+         } else {
+            // Handle graph fetch error
+            const errorText = await graphResponse.text();
+            if (cyContainer) cyContainer.innerHTML = `<p>加载图谱数据出错 ${graphResponse.status}: ${errorText}</p>`;
+            console.error(`Graph fetch failed (${messageId}): ${errorText}`);
+         }
+
+    } catch (error) {
+        console.error(`为消息 ${messageId} 获取细节时出错:`, error);
+        // Display general errors if Promise.all fails or specific fetch errors weren't caught
+        if (vectorContent.innerHTML.includes('加载中')) {
+             vectorContent.innerHTML = `<p>加载向量细节失败: ${error.message}</p>`;
+        }
+         // Ensure cyContainer is updated, not cyTargetDiv which might be removed by error handling
+         const cyTargetDiv = document.getElementById('cy');
+        if (cyTargetDiv && cyTargetDiv.innerHTML.includes('加载中') && cyContainer) {
+             cyContainer.innerHTML = `<p>加载图谱细节失败: ${error.message}</p>`;
+        } else if (!cyTargetDiv && cyContainer && cyContainer.innerHTML.includes('加载中')) {
+            cyContainer.innerHTML = `<p>加载图谱细节失败: ${error.message}</p>`;
+        }
+    }
 }
+
+function clearRetrievalResults(showLoading = false) {
+    // Clears or sets loading state for vector and graph areas
+    vectorContent.innerHTML = showLoading ? '<p>加载向量数据中...</p>' : '<p>点击历史记录查看详情。</p>';
+
+    // Clear Cytoscape graph
+    if (currentCytoscapeInstance) {
+        currentCytoscapeInstance.destroy();
+        currentCytoscapeInstance = null;
+    }
+     // Ensure the #cy div exists inside the container for placing text/graph
+     if (cyContainer) {
+        let cyTargetDiv = document.getElementById('cy');
+        if (!cyTargetDiv) {
+            cyTargetDiv = document.createElement('div');
+            cyTargetDiv.id = 'cy';
+            cyContainer.innerHTML = ''; // Clear container before adding div
+            cyContainer.appendChild(cyTargetDiv);
+        }
+         cyTargetDiv.innerHTML = showLoading ? '<p>加载图谱数据中...</p>' : '<p>点击历史记录查看图谱。</p>';
+     } else {
+         console.error("Cytoscape container '#cy-container' not found.");
+     }
+
+}
+
 
 function renderCytoscapeGraph(graphData) {
-    console.log("开始渲染图数据",graphData)
-    let cyTargetDiv = document.getElementById('cy');
-if (!cyTargetDiv) {
-    console.error("Cytoscape 容器 'cy' 在 DOM 中未找到。");
-    cyContainer.innerHTML = '';
-    cyTargetDiv = document.createElement('div');
-    cyTargetDiv.id = 'cy';
-    cyContainer.appendChild(cyTargetDiv);
-} else {
-    cyTargetDiv.innerHTML = '';  // 清空之前的内容
-}
+    // Renders the knowledge graph using Cytoscape.js
+    console.log("Rendering graph data:", graphData);
+    const cyTargetDiv = document.getElementById('cy'); // Target div inside the container
 
-if (currentCytoscapeInstance) {
-    currentCytoscapeInstance.destroy();  // 销毁现有实例
-    currentCytoscapeInstance = null;
-}
+    if (!cyTargetDiv) {
+         console.error("Cytoscape target div 'cy' not found in DOM.");
+         // Optionally update the container with an error message
+         if(cyContainer) cyContainer.innerHTML = '<p>无法渲染图谱：目标区域未找到。</p>';
+         return; // Cannot render without the target div
+    }
+    cyTargetDiv.innerHTML = ''; // Clear previous graph or loading message
 
-try {
-    // 渲染 Cytoscape 实例
-    currentCytoscapeInstance = cytoscape({
-        container: cyTargetDiv,
-        elements: {
-            nodes: graphData.nodes || [],
-            edges: graphData.edges || []
-        },
-        style: [
-            {
-                selector: 'node',
-                style: {
-                    'background-color': 'data(color)',
-                    'label': 'data(label)',
-                    'width': 50,
-                    'height': 50,
-                    'font-size': '10px',
-                    'text-valign': 'center',
-                    'text-halign': 'center',
-                    'color': '#000',
-                    'text-outline-color': '#fff',
-                    'text-outline-width': 1
-                }
+    // Destroy previous instance if it exists
+    if (currentCytoscapeInstance) {
+        currentCytoscapeInstance.destroy();
+        currentCytoscapeInstance = null;
+    }
+
+    // Basic check for empty data to avoid Cytoscape errors
+    if ((!graphData.nodes || graphData.nodes.length === 0) && (!graphData.edges || graphData.edges.length === 0)) {
+        console.log("Graph data is empty, skipping Cytoscape rendering.");
+        cyTargetDiv.innerHTML = '<p>无图谱数据可显示。</p>';
+        return;
+    }
+
+
+    try {
+        // Initialize Cytoscape
+        currentCytoscapeInstance = cytoscape({
+            container: cyTargetDiv,
+            elements: { // Ensure data format is correct for Cytoscape
+                nodes: graphData.nodes || [], // Expecting array of { data: { id: ..., ... } }
+                edges: graphData.edges || []  // Expecting array of { data: { id: ..., source: ..., target: ...} }
             },
-            {
-                selector: 'edge',
-                style: {
-                    'line-color': 'data(color)',
-                    'target-arrow-color': 'data(color)',
-                    'curve-style': 'bezier',
-                    'target-arrow-shape': 'triangle',
-                    'label': 'data(label)',
-                    'width': 2,
-                    'font-size': '8px',
-                    'text-rotation': 'autorotate',
-                    'text-margin-y': -5,
-                    'color': '#000',
-                    'text-background-color': '#fff',
-                    'text-background-opacity': 0.7,
-                    'text-background-padding': '1px'
-                }
-            },
-            {
-                selector: '.highlighted-node',
-                style: {
-                    'background-color': '#FF5733',
-                    'border-color': '#E84A27',
-                    'border-width': 3,
-                    'width': 60,
-                    'height': 60,
-                    'z-index': 10,
-                    'shadow-blur': 10,
-                    'shadow-color': '#FF5733',
-                    'shadow-opacity': 0.8
-                }
-            },
-            {
-                selector: '.highlighted-edge',
-                style: {
-                    'line-color': '#FF5733',
-                    'target-arrow-color': '#FF5733',
-                    'width': 4,
-                    'z-index': 9,
-                    'shadow-blur': 5,
-                    'shadow-color': '#FF5733',
-                    'shadow-opacity': 0.6
-                }
+            style: [ // Your style definitions from the original code
+                { selector: 'node', style: { 'background-color': 'data(color, "#888")', 'label': 'data(label)', 'width': 50, 'height': 50, 'font-size': '10px', 'text-valign': 'center', 'text-halign': 'center', 'color': '#000', 'text-outline-color': '#fff', 'text-outline-width': 1 } },
+                { selector: 'edge', style: { 'line-color': 'data(color, "#ccc")', 'target-arrow-color': 'data(color, "#ccc")', 'curve-style': 'bezier', 'target-arrow-shape': 'triangle', 'label': 'data(label)', 'width': 2, 'font-size': '8px', 'text-rotation': 'autorotate', 'text-margin-y': -5, 'color': '#000', 'text-background-color': '#fff', 'text-background-opacity': 0.7, 'text-background-padding': '1px' } },
+                { selector: '.highlighted-node', style: { 'background-color': '#FF5733', 'border-color': '#E84A27', 'border-width': 3, 'width': 60, 'height': 60, 'z-index': 10, 'shadow-blur': 10, 'shadow-color': '#FF5733', 'shadow-opacity': 0.8 } },
+                { selector: '.highlighted-edge', style: { 'line-color': '#FF5733', 'target-arrow-color': '#FF5733', 'width': 4, 'z-index': 9, 'shadow-blur': 5, 'shadow-color': '#FF5733', 'shadow-opacity': 0.6 } }
+            ],
+            layout: { // Your layout options
+                name: 'cose', fit: true, padding: 30, animate: true, animationDuration: 500, nodeRepulsion: 400000, idealEdgeLength: 100, nodeOverlap: 20
             }
-        ],
-        layout: {
-            name: 'cose',  // 选择图的布局
-            fit: true,
-            padding: 30,
-            animate: true,
-            animationDuration: 500,
-            nodeRepulsion: 400000,
-            idealEdgeLength: 100,
-            nodeOverlap: 20
-        }
-    });
+        });
 
-    // 高亮节点
-    if (graphData['highlighted-node']?.forEach) {
-        graphData['highlighted-node'].forEach(n => {
+         // Apply highlighting based on data received from backend
+        (graphData['highlighted-node'] || []).forEach(n => {
             if (n?.data?.id) {
-                currentCytoscapeInstance.getElementById(n.data.id).addClass('highlighted-node');
+                 try { currentCytoscapeInstance.getElementById(n.data.id).addClass('highlighted-node'); }
+                 catch(e){ console.warn(`Highlight node error (ID: ${n.data.id}): ${e.message}`); } // Catch errors for missing elements
             }
+         });
+        (graphData['highlighted-edge'] || []).forEach(e => {
+             if (e?.data?.id) {
+                  try { currentCytoscapeInstance.getElementById(e.data.id).addClass('highlighted-edge'); }
+                  catch(e){ console.warn(`Highlight edge error (ID: ${e.data.id}): ${e.message}`); } // Catch errors
+             }
+         });
+
+
+        // Fit the graph to the viewport after layout is ready
+        currentCytoscapeInstance.ready(() => {
+             currentCytoscapeInstance.fit(null, 30);
         });
+        console.log("Cytoscape graph rendered.");
+
+    } catch (error) {
+        console.error("Cytoscape rendering error:", error);
+        cyTargetDiv.innerHTML = `<p>渲染图谱时出错: ${error.message}</p>`; // Display error in the div
+        currentCytoscapeInstance = null; // Ensure instance is null on error
     }
-
-    // 高亮边
-    if (graphData['highlighted-edge']?.forEach) {
-        graphData['highlighted-edge'].forEach(e => {
-            if (e?.data?.id) {
-                currentCytoscapeInstance.getElementById(e.data.id).addClass('highlighted-edge');
-            }
-        });
-    }
-
-    currentCytoscapeInstance.ready(() => {
-        currentCytoscapeInstance.fit(null, 30);  // 自动调整布局
-    });
-
-    console.log("Cytoscape 图谱已渲染。");
-
-} catch (error) {
-    console.error("Cytoscape 渲染错误:", error);
-    cyTargetDiv.innerHTML = `<p>渲染图谱时出错: ${error.message}</p>`;
-    currentCytoscapeInstance = null;
 }
 
-}
-
+// Helper to update internal answer state from backend response or history item
 function updateAnswerStore(data) {
+    // Prioritize specific fields if available (e.g., from /generate response)
     currentAnswers.query = data.query !== undefined ? data.query : currentAnswers.query;
-    currentAnswers.vector = data.vector_response !== undefined ? data.vector_response : "";
-    currentAnswers.graph = data.graph_response !== undefined ? data.graph_response : "";
-    currentAnswers.hybrid = data.hybrid_response !== undefined ? data.hybrid_response : "";
-    console.log("已更新答案存储:", currentAnswers);
+    currentAnswers.vector = data.vectorAnswer !== undefined ? data.vectorAnswer : (data.vector_response !== undefined ? data.vector_response : "");
+    currentAnswers.graph = data.graphAnswer !== undefined ? data.graphAnswer : (data.graph_response !== undefined ? data.graph_response : "");
+    currentAnswers.hybrid = data.hybridAnswer !== undefined ? data.hybridAnswer : (data.hybrid_response !== undefined ? data.hybrid_response : "");
+    console.log("Updated answer store:", currentAnswers);
 }
 
+// --- Other Utilities (Keep toggleResize, fetchAndDisplaySuggestions if used) ---
 function toggleResize(iconElement, targetType = 'section') {
-    const targetElement = iconElement.closest(targetType === 'section' ? '.section-box' : '.box');
-    if (!targetElement) return; const isEnlarged = targetElement.classList.toggle('enlarged');
-    iconElement.textContent = isEnlarged ? 'fullscreen_exit' : 'fullscreen';
-    if (targetElement.contains(cyContainer) || targetElement.id === 'cy-container') {
-        if (currentCytoscapeInstance) { setTimeout(() => { currentCytoscapeInstance.resize(); currentCytoscapeInstance.fit(null, 30); }, 300); } 
+     const targetElement = iconElement.closest(targetType === 'section' ? '.section-box' : '.box');
+     if (!targetElement) return;
+     const isEnlarged = targetElement.classList.toggle('enlarged');
+     iconElement.textContent = isEnlarged ? 'fullscreen_exit' : 'fullscreen';
+      // Ensure Cytoscape graph resizes correctly if its container is resized
+     if (targetElement.contains(cyContainer) || targetElement.id === 'cy-container') {
+         if (currentCytoscapeInstance) {
+             // Delay resize slightly to allow container animation/transition to finish
+             setTimeout(() => {
+                 currentCytoscapeInstance.resize();
+                 currentCytoscapeInstance.fit(null, 30); // Re-fit after resize
+             }, 300); // Adjust delay if needed
+         }
+     }
+}
+async function fetchAndDisplaySuggestions() {
+    // Fetches and displays suggestions (ensure backend route is correct)
+    adviceContent.innerHTML = "正在加载建议...";
+    try {
+        const response = await fetch('/get_suggestions'); // Ensure this endpoint works
+        if (!response.ok) {
+             const errorText = await response.text();
+             throw new Error(`网络错误: ${response.status} ${errorText}`);
+        }
+        const data = await response.json();
+        console.log("建议数据:", data);
+        // Adapt rendering based on expected 'data' structure from backend
+        if (data.advice) { // Assuming simple structure for now
+             adviceContent.innerHTML = `
+                 <h3>建议:</h3>
+                 <p>${data.advice}</p>
+                 `;
+        } else {
+             adviceContent.textContent = "未收到有效的建议数据。";
+        }
+    } catch (error) {
+         console.error('获取建议时出错:', error);
+         adviceContent.textContent = `无法加载建议: ${error.message}`;
     }
 }
 
-// --- 初始化 ---
-document.addEventListener('DOMContentLoaded', async () => {
-    console.log("DOM 完全加载并解析。");
-    document.querySelectorAll('.sidebar-section .sidebar-header, .sidebar-section-inner .sidebar-header-inner').forEach((header) => { 
-        const content = header.nextElementSibling; const icon = header.querySelector('.material-icons');
-        if (!header.classList.contains('collapsed')) header.classList.add("collapsed");
-        if (content) content.style.display = "none";
-        if (icon) icon.textContent = 'expand_more'; 
-    }
-);
-    populateSelect(dim1Select, Object.keys(datasetHierarchy));
-    clearSelect(dim2Select);
-    clearSelect(dim3Select);
-    updateDatasetSelection();
-    applySettingsButton.disabled = true;
-    await initializeHistory(); // 初始化历史记录区域 (根据 USE_BACKEND_HISTORY 决定行为)
-    displaySelectedAnswer();
-});
-
-// --- 事件监听器 ---
-ragSelect.addEventListener("change", displaySelectedAnswer);
-dim1Select.addEventListener('change', updateDatasetSelection);
+// --- Event Listeners ---
+document.addEventListener('DOMContentLoaded', checkAuth); // Start auth check on page load
+ragSelect.addEventListener("change", displaySelectedAnswer); // Update answer display on mode change
+dim1Select.addEventListener('change', updateDatasetSelection); // Dataset dimension dropdowns
 dim2Select.addEventListener('change', updateDatasetSelection);
 dim3Select.addEventListener('change', updateDatasetSelection);
-historySessionSelect.addEventListener('change', (event) => {
-    const selectedValue = event.target.value;
-    if (USE_BACKEND_HISTORY) { currentSession = selectedValue; console.log("(API 模式) 会话已更改为 ID:", currentSession); }
-    else { currentHistorySessionName = selectedValue; console.log("(本地模式) 会话已更改为名称:", currentHistorySessionName); }
-    displaySessionHistory();
-});
-newHistorySessionButton.addEventListener('click', showNewSessionInput);
-newSessionNameInput.addEventListener('keydown', (event) => { if (event.key === 'Enter') { event.preventDefault(); handleConfirmNewSession(); } else if (event.key === 'Escape') { hideNewSessionInput(); } });
-cancelNewSessionButton.addEventListener('click', hideNewSessionInput);
 
-// function startAutoRefreshSessionHistory(intervalMs = 60000) {
-//     // 第一次立即执行一次
-//     displaySessionHistory();
+// Add listener for the logout button
+if (logoutButton) {
+    logoutButton.addEventListener('click', handleLogout);
+}
 
-//     // 每隔 intervalMs 毫秒执行一次
-//     setInterval(() => {
-//         displaySessionHistory();
-//     }, intervalMs);
-// }
-
-
-// window.addEventListener('DOMContentLoaded', () => {
-//     startAutoRefreshSessionHistory(); // 默认每分钟刷新一次
-// });
+// --- Initial call is now triggered by checkAuth -> initializeDemo ---

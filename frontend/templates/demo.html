@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NeutronRAG Demo</title>
-    <link rel="stylesheet" href="../static/css/demo.css">
+    <title>NeutronRAG Demo - 多用户版</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/demo.css') }}">
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
     <script src="https://unpkg.com/cytoscape/dist/cytoscape.min.js"></script>
 </head>
@@ -17,8 +17,10 @@
             </div>
             <input type="text" placeholder="请输入内容..." id="user-input" class="input-box">
             <button id="send-button" class="send-button">Send</button>
-            <div>
-                <i class="material-icons user-icon">account_circle</i>
+            <div class="user-area">
+                 <i class="material-icons user-icon">account_circle</i>
+                 <span id="user-info-display" style="margin-left: 5px; display: none; color: #eee; font-weight: bold;"></span>
+                 <button id="logout-button" class="logout-button" style="margin-left: 15px; display: none; padding: 5px 10px; cursor: pointer;">登出</button>
             </div>
         </header>
 
@@ -36,7 +38,7 @@
                             <option value="llama3:8b">llama3:8b</option>
                             <option value="llama2:13b">llama2:13b</option>
                             <option value="deepseek-reasoner">DeepSeek-R1</option>
-                        </select>
+                            </select>
                     </div>
                     <div class="input-group">
                         <label for="api-key-input">API-KEY:</label>
@@ -94,7 +96,7 @@
                             </div>
                         </div>
                     </div>
-                    <div class="sidebar-section-inner">
+                     <div class="sidebar-section-inner">
                          <div class="sidebar-header-inner" onclick="toggleSidebarSection(this)">
                             <h3>GraphRAG</h3>
                             <i class="material-icons">expand_more</i>
@@ -104,8 +106,7 @@
                                 <label for="k-hop">K-HOP:</label>
                                 <select id="k-hop" name="k-hop">
                                     <option value="1">1</option>
-                                    <option value="2">2</option>
-                                    <option value="3">3</option>
+                                    <option value="2" selected>2</option> <option value="3">3</option>
                                 </select>
                             </div>
                             <div class="input-group">
@@ -144,9 +145,7 @@
                             </div>
                         </div>
                     </div>
-                </div>
-            </div>
-            <button id="applySettingsButton" class="run-button" style="height: 50px;" disabled>Apply Settings</button>
+                </div> </div> <button id="applySettingsButton" class="run-button" style="height: 50px;" disabled>Apply Settings</button>
         </aside>
 
         <main class="main-content">
@@ -158,32 +157,17 @@
                         <select id="rag-select">
                             <option value="vector">Vector</option>
                             <option value="graph">Graph</option>
-                            <option value="hybrid">Hybrid</option>
-                        </select>
+                            <option value="hybrid" selected>Hybrid</option> </select>
                     </div>
                     <div class="title-icons">
-                        <img class="answer-icon" src="../lib/qa.png" alt="Answer Icon">
+                        <img class="answer-icon" src="{{ url_for('static', filename='lib/qa.png') }}" alt="Answer Icon">
                     </div>
                 </div>
                 <div class="content-wrapper">
                     <div class="answer-content">
                         <div class="box" id="current-answer-display">
                             <div class="content" id="current-answer-content">
-                                <!-- 用户消息 -->
-                                <div class="chat-message user-message">
-                                    <div class="message-bubble">
-                                        When was Pixel Fold announced?
-                                    </div>
-                                    <img src="../lib/employee.png" alt="User Icon" class="message-icon user-icon-bubble">
-                                </div>
-
-                                <!-- 模型消息 -->
-                                <div class="chat-message model-message">
-                                    <img src="../lib/llama.png" alt="Model Icon" class="message-icon model-icon-bubble">
-                                    <div class="message-bubble">
-                                        According to the provided context information, Pixel Fold was announced on September 12, 2022.
-                                    </div>
-                                </div>
+                                <div class="placeholder-text">请输入内容或从历史记录中选择。</div>
                             </div>
                         </div>
                     </div>
@@ -195,17 +179,15 @@
                     <div class="section-title suggestion-title">
                         <span>Suggestions</span>
                         <div class="title-icons">
-                            <img src="../lib/lantern.png" alt="Suggestion Icon" class="suggestion-icon">
+                            <img src="{{ url_for('static', filename='lib/lantern.png') }}" alt="Suggestion Icon" class="suggestion-icon">
                         </div>
                     </div>
                     <div class="advice-section">
                         <div class="box" id="advice-box">
-
                             <div class="content advice-content-wrapper" id="advice-content">
-                                <!-- The icon for the content -->
-                                <img src="../lib/suggestion.png" alt="Suggestion Type Icon" class="advice-type-icon">
-                                <!-- Container for the actual text suggestions -->
+                                <img src="{{ url_for('static', filename='lib/suggestion.png') }}" alt="Suggestion Type Icon" class="advice-type-icon">
                                 <div id="advice-text">
+                                    应用设置后或可查看建议。
                                 </div>
                             </div>
                         </div>
@@ -221,14 +203,12 @@
                   </div>
                 </div>
                 <div class="retrieval-content">
-                    <div class="box" id="vector-result">
-                        <h3 class="retrieval-box-title">Vector Results</h3>
+                    <div class="box" id="vector-result"> <h3 class="retrieval-box-title">Vector Results</h3>
                         <div id="vector-content">
-                            Select an item from History to view details.
+                            点击历史记录查看详情。
                         </div>
                     </div>
-                    <div class="box" id="cy-container">
-                        <h3 class="retrieval-box-title">Knowledge Graph</h3>
+                    <div class="box" id="cy-container"> <h3 class="retrieval-box-title">Knowledge Graph</h3>
                         <div id="cy"></div>
                     </div>
                 </div>
@@ -237,34 +217,34 @@
             <section class="history-section section-box">
                 <div class="section-title" id="history-title">
                     <span>History</span>
-                    <button id="read-history">read history</button>
                     <div class="history-session-controls">
+                         <label for="history-session-select" style="margin-left: 10px;">会话:</label>
                          <select id="history-session-select">
-                         </select>
-                         <button id="new-history-session-button" title="New History Session">+</button>
+                             </select>
+                         <button id="new-history-session-button" title="新会话">+</button>
                          <div id="new-session-input-container" style="display: none; margin-left: 5px; align-items: center;">
-                            <input type="text" id="new-session-name-input" placeholder="Enter name & press Enter" size="15">
-                            <button id="cancel-new-session-button" title="Cancel" class="cancel-button" style="margin-left: 3px; padding: 1px 4px; font-size: 0.8em; line-height: 1;">✕</button>
+                            <input type="text" id="new-session-name-input" placeholder="输入名称 & 回车" size="15">
+                            <button id="cancel-new-session-button" title="取消" class="cancel-button" style="margin-left: 3px; padding: 1px 4px; font-size: 0.8em; line-height: 1;">✕</button>
                          </div>
                     </div>
                      <div class="title-icons">
-                        <img src="../lib/history.png" alt="History Icon" class="history-icon">
+                        <img src="{{ url_for('static', filename='lib/history.png') }}" alt="History Icon" class="history-icon">
                      </div>
                 </div>
                 <div class="history-content" id="scroll-container">
                     <div id="question-list">
-                        Select or create a history session.
+                        请选择或创建一个会话。
                     </div>
                     <div class="more-info">
-                        <span class="more-info-text">if you want to know more detailed metric, please click</span>
+                        <span class="more-info-text">点击查看详细分析</span>
                         <i class="material-icons more-button">arrow_forward</i>
-                        <a href="analysis.html" id="moreAnalysisLink" class="more-link" style="margin-left: 5px;">More</a>
+                        <a href="{{ url_for('analysis') }}" id="moreAnalysisLink" class="more-link" style="margin-left: 5px;">More</a>
                     </div>
                 </div>
             </section>
         </main>
     </div>
 
-    <script src="../static/js/demo.js"></script>
+    <script src="{{ url_for('static', filename='js/demo.js') }}"></script>
 </body>
 </html>
