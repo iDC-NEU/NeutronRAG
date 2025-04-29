@@ -26,6 +26,8 @@ import os
 import json
 import sys
 from tqdm import tqdm
+from llama_index.core.utils import print_text
+import uuid
 
 def append_to_json_list(filepath, new_data):
     # 如果文件不存在或为空，创建新列表
@@ -212,6 +214,60 @@ def convert_to_triples(retrieve_results):
 #Google's nest thermostat -Is on sale for-> $90 <-Was originally priced at- Echo show 5 (third-gen)):
 
 
+def checkanswer(prediction, ground_truth, verbose=False):
+    """
+    检查预测答案是否与标准答案匹配。
+
+    :param str prediction:
+        预测答案，输入字符串将被转换为小写以进行比较。
+
+    :param ground_truth:
+        默认为列表,如果输入为str,将手动转为列表，其中列表中的元素表示为候选答案。
+        如果是嵌套列表表示这个问题同时包括多个答案，需要同时回答正确。
+
+    :return:
+        二进制标签列表,1 表示匹配成功,0 表示匹配失败。
+    :rtype: List[int]
+
+    :示例:
+
+    >>> prediction = "The cat sits on the mat"
+    >>> ground_truth = [["cat", "CAT"]]
+    >>> checkanswer("cat", ground_truth)
+    [1]
+
+    >>> checkanswer("cat and mat", [["cat"], ["MAT", "mat"]])
+    [1, 1]
+    """
+    prediction = prediction.lower()
+    if not isinstance(ground_truth, list):
+        ground_truth = [ground_truth]
+    labels = []
+    flag = False
+    for instance in ground_truth:
+        flag = True
+        if isinstance(instance, list):
+            flag = False
+            instance = [i.lower() for i in instance]
+            for i in instance:
+                if i in prediction:
+                    flag = True
+                    break
+        else:
+            instance = instance.lower()
+            if instance not in prediction:
+                flag = False
+        labels.append(int(flag))
+
+    if verbose:
+        print_text(
+            f"\nprediction: {prediction}, \nground_truth: {ground_truth}, \nlabels: {labels}\n",
+            color="yellow",
+        )
+
+    if 0 not in labels and 1 in labels:
+        flag =  True
+    return flag
 
 
 
@@ -272,7 +328,7 @@ class Demo_chat:
         self.strategy = strategy
         self.api_key = api_key
         #自动匹配 URL
-        self.url = self.Model_Url_Mapping.get(model_name, "https://api.deepseek.com")  # 若没有匹配上的模型，则默认使用 Ollama
+        self.url = self.Model_Url_Mapping.get(model_name, "http://localhost:11434/v1")  # 若没有匹配上的模型，则默认使用 Ollama
         print("model_name",model_name)
         self.llm = self.load_llm(self.model_name,self.url,self.api_key)
         self.vectordb = MilvusDB(dataset_name, 1024, overwrite=False, store=True,retriever=True)
@@ -363,20 +419,75 @@ class Demo_chat:
 
 
     def new_history_chat(self, mode="rewrite"):
-        evidence_path = "./home/yangxb/NeutronRAG/backend/evaluator/rgb_evidence_test.json"
+        evidence_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "evaluator", "rgb_evidence_test.json")
+        
         print("dataset_path:",self.dataset_path)
         with open(self.dataset_path, "r") as f:  # 读取模式改为'r'，避免覆盖原数据
             data = json.load(f)
-        # data = data[:10]
+        data = data[:10]
+
+        # 用于计算评估平均值
+        total_queries = 0
+        vector_metrics_sum = {
+            "retrieval_metrics": {
+                "precision": 0,
+                "recall": 0,
+                "relevance": 0
+            },
+            "generation_metrics": {
+                "answer_correctness": 0,
+                "rougeL_score": 0,
+                "hallucinations_score": 0,
+                "exact_match": 0
+            }
+        }
+        graph_metrics_sum = {
+            "retrieval_metrics": {
+                "precision": 0,
+                "recall": 0,
+                "relevance": 0
+            },
+            "generation_metrics": {
+                "answer_correctness": 0,
+                "rougeL_score": 0,
+                "hallucinations_score": 0,
+                "exact_match": 0
+            }
+        }
+        hybrid_metrics_sum = {
+            "retrieval_metrics": {
+                "precision": 0,
+                "recall": 0,
+                "relevance": 0
+            },
+            "generation_metrics": {
+                "answer_correctness": 0,
+                "rougeL_score": 0,
+                "hallucinations_score": 0,
+                "exact_match": 0
+            }
+        }
 
         # 使用 tqdm 显示进度条
         for item in tqdm(data, desc="Processing items", unit="item"):  # 显示进度条
             query_id = item.get("id", None)
             query = item["query"]
+            answer = item.get("answer", None)
+            response_type = "YELLOW"
 
             response_vector = self.chat_vector.web_chat(message=query, history=None)
             response_graph = self.chat_graph.web_chat(message=query, history=None)
             response_hybrid = self.hybrid_chat(message=query)
+
+            flag_vector = checkanswer(response_vector, answer, "True")
+            flag_graph = checkanswer(response_graph, answer, "True")
+            flag_hybrid = checkanswer(response_hybrid, answer, "True")
+
+
+            if flag_vector == True and flag_graph == True and flag_hybrid == True:
+                response_type = "GREEN"
+            if flag_vector == False and flag_graph == False and flag_hybrid == False:
+                response_type = "RED"
 
             vector_retrieval_result = self.chat_vector.retrieval_result()
             graph_retrieval_result = self.chat_graph.retrieval_result()
@@ -405,10 +516,47 @@ class Demo_chat:
                                     evidence_path=evidence_path,
                                     mode="vector"
                                     )
+
+            # 处理评估平均值
+            total_queries += 1
+            
+            if evaluation_vector and evaluation_vector.get("metrics"):
+                for metric_type in ["retrieval_metrics", "generation_metrics"]:
+                    if metric_type in evaluation_vector["metrics"]:
+                        for metric, value in evaluation_vector["metrics"][metric_type].items():
+                            vector_metrics_sum[metric_type][metric] += value
+
+            if evaluation_graph and evaluation_graph.get("metrics"):
+                for metric_type in ["retrieval_metrics", "generation_metrics"]:
+                    if metric_type in evaluation_graph["metrics"]:
+                        for metric, value in evaluation_graph["metrics"][metric_type].items():
+                            graph_metrics_sum[metric_type][metric] += value
+
+            if evaluation_hybrid and evaluation_hybrid.get("metrics"):
+                for metric_type in ["retrieval_metrics", "generation_metrics"]:
+                    if metric_type in evaluation_hybrid["metrics"]:
+                        for metric, value in evaluation_hybrid["metrics"][metric_type].items():
+                            hybrid_metrics_sum[metric_type][metric] += value
+
+            avg_vector_evaluation = {
+                "retrieval_metrics": {metric: value/total_queries for metric, value in vector_metrics_sum["retrieval_metrics"].items()},
+                "generation_metrics": {metric: value/total_queries for metric, value in vector_metrics_sum["generation_metrics"].items()}
+            }
+            avg_graph_evaluation = {
+                "retrieval_metrics": {metric: value/total_queries for metric, value in graph_metrics_sum["retrieval_metrics"].items()},
+                "generation_metrics": {metric: value/total_queries for metric, value in graph_metrics_sum["generation_metrics"].items()}
+            }
+            avg_hybrid_evaluation = {
+                "retrieval_metrics": {metric: value/total_queries for metric, value in hybrid_metrics_sum["retrieval_metrics"].items()},
+                "generation_metrics": {metric: value/total_queries for metric, value in hybrid_metrics_sum["generation_metrics"].items()}
+            }
+
             # 创建新的数据项
             item_data = {
                 "id": query_id,
                 "query": query,
+                "answer": answer,
+                "type": response_type,
                 "vector_response": response_vector,
                 "graph_response": response_graph,
                 "hybrid_response": response_hybrid,
@@ -416,13 +564,19 @@ class Demo_chat:
                 "graph_retrieval_result": graph_retrieval_result,
                 "vector_evaluation": evaluation_vector,
                 "graph_evaluation": evaluation_graph,
-                "hybrid_evaluation": evaluation_hybrid
+                "hybrid_evaluation": evaluation_hybrid,
+                "avg_vector_evaluation": avg_vector_evaluation,
+                "avg_graph_evaluation": avg_graph_evaluation,
+                "avg_hybrid_evaluation": avg_hybrid_evaluation
             }
 
             with open(self.path_name, 'a') as f: 
                 json.dump(item_data, f, separators=(',', ':'))  # 使用 ',' 和 ':' 分隔符
                 f.write('\n')  # 每个元素占一行
                 print(f"Results successfully saved to {self.path_name}")
+            
+            # 流式返回
+            yield item_data
 
 
 

@@ -37,7 +37,7 @@ LLMProvider = {
 
 class ClientFactory(metaclass=Singleton):
     
-    def __init__(self, model_name, url, key, llmbackend="openai"):
+    def __init__(self, model_name, url, key, llmbackend="llama_index"):
         """
         初始化 ClientFactory
 

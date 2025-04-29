@@ -769,8 +769,19 @@ def load_model():
         # 测试模型 (原始逻辑)
         test_result = current_model.chat_test() # 假设 chat_test 不需要输入
         print(f"模型测试结果: {test_result}")
-        current_model.new_history_chat()
-        return jsonify({"status": "success", "message": f"模型 {model_name} (数据集: {dataset}) 加载成功"}), 200
+        
+        def generate():
+            # 发送初始状态
+            yield json.dumps({"status": "start", "message": f"模型 {model_name} (数据集: {dataset}) 加载成功"}) + "\n"
+            
+            # 处理每个项目并立即发送
+            for item_data in current_model.new_history_chat():
+                yield json.dumps({"status": "processing", "item_data": item_data}) + "\n"
+            
+            # 发送完成状态
+            yield json.dumps({"status": "complete", "message": "所有项目处理完成"}) + "\n"
+
+        return Response(generate(), mimetype='text/event-stream')
 
     except Exception as e:
         print(f"加载模型时出错: {e}")
@@ -909,4 +920,4 @@ def get_session_history():
 
 if __name__ == '__main__':
     # use_reloader=False 对于使用全局变量进行内存存储很重要
-    app.run(host='0.0.0.0', port=5001, debug=True, use_reloader=False)
+    app.run(host='0.0.0.0', port=8080, debug=True, use_reloader=False)

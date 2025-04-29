@@ -398,7 +398,11 @@ async function displaySessionHistory() {
         }
         div.style.backgroundColor = backgroundColor;
 
-        const answerSnippet = item.answer ? item.answer.substring(0, 30) + '...' : '';
+        // 确保 answer 是字符串类型
+        const answerText = typeof item.answer === 'string' ? item.answer : 
+                          item.answer ? JSON.stringify(item.answer) : '';
+        const answerSnippet = answerText ? answerText.substring(0, 30) + '...' : '';
+        
         div.innerHTML = `
             <p>ID: ${item.id}</p>
             <p>Query: ${item.query || 'N/A'}</p>
@@ -609,7 +613,7 @@ applySettingsButton.addEventListener("click", async () => {
         alert("请完整选择三个下拉框的内容！");
         return;
     }
-        // try {
+        
     const postData = {
         hop: hop,
         type: type,
@@ -657,7 +661,7 @@ applySettingsButton.addEventListener("click", async () => {
     console.log("正在应用设置:", settingsData);
     
     try {
-        // 修复1: 直接使用 fetch 和 await，不需要 Promise.allSettled
+        historySessions[currentSession] = []; 
         const response = await fetch("/load_model", { 
             method: "POST", 
             headers: { "Content-Type": "application/json" }, 
@@ -668,12 +672,76 @@ applySettingsButton.addEventListener("click", async () => {
             const errorText = await response.text();
             throw new Error(`应用设置失败: ${response.status} ${errorText}`);
         }
-        
-        const result = await response.json();
-        console.log("设置应用成功:", result);
-        
-        // 可以在这里调用 fetchAndDisplaySuggestions() 如果需要
-        // await fetchAndDisplaySuggestions();
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+
+        while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            
+            const chunk = decoder.decode(value);
+            const lines = chunk.split('\n');
+            
+            for (const line of lines) {
+                if (!line.trim()) continue;
+                
+                try {
+                    const data = JSON.parse(line);
+                    switch (data.status) {
+                        case 'start':
+                            console.log('开始处理:', data.message);
+                            adviceContent.innerHTML = `<p>${data.message}</p>`;
+                            break;
+                        case 'processing':
+                            // 处理每个项目的数据并存储到当前会话
+                            if (data.item_data) {
+                                const historyItem = {
+                                    id: data.item_data.id,
+                                    query: data.item_data.query,
+                                    answer: data.item_data.answer,
+                                    type: data.item_data.type,
+                                    details: {
+                                        vectorAnswer: data.item_data.vector_response,
+                                        graphAnswer: data.item_data.graph_response,
+                                        hybridAnswer: data.item_data.hybrid_response,
+                                        vectorRetrieval: data.item_data.vector_retrieval_result,
+                                        graphRetrieval: data.item_data.graph_retrieval_result,
+                                        vectorEvaluation: data.item_data.vector_evaluation,
+                                        graphEvaluation: data.item_data.graph_evaluation,
+                                        hybridEvaluation: data.item_data.hybrid_evaluation,
+                                        avgVectorEvaluation: data.item_data.avg_vector_evaluation,
+                                        avgGraphEvaluation: data.item_data.avg_graph_evaluation,
+                                        avgHybridEvaluation: data.item_data.avg_hybrid_evaluation
+                                    },
+                                    timestamp: new Date().toISOString()
+                                };
+                                
+                                // 添加到当前会话
+                                historySessions[currentSession].push(historyItem);
+                                
+                                // 更新UI显示
+                                displaySessionHistory();
+                                
+                                // 更新处理状态显示
+                                adviceContent.innerHTML = `<p>正在处理: ${data.item_data.query}</p>`;
+                            }
+                            break;
+                        case 'complete':
+                            console.log('处理完成:', data.message);
+                            adviceContent.innerHTML = `<p>${data.message}</p>`;
+                            break;
+                        case 'error':
+                            console.error('发生错误:', data.message);
+                            adviceContent.innerHTML = `<p class="error">错误: ${data.message}</p>`;
+                            break;
+                    }
+                } catch (error) {
+                    console.error('解析响应数据时出错:', error);
+                    adviceContent.innerHTML = `<p class="error">解析数据时出错: ${error.message}</p>`;
+                }
+            }
+        }
         
     } catch (error) { 
         console.error("应用设置时发生错误:", error); 
