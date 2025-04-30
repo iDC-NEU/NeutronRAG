@@ -780,50 +780,129 @@ def logout():
 
 
 # --- 模型加载接口 (原始) ---
+# @app.route('/load_model', methods=['POST'])
+# def load_model():
+#     global current_model
+#     try:
+#         data = request.json
+#         model_name = data.get("model_name")
+#         url = data.get("url") # url 在 Demo_chat 中似乎未使用 (原始注释)
+#         key = data.get("key")
+#         dataset_info = data.get("dataset") # 获取数据集名称
+#         hop = dataset_info.get('hop')
+#         type = dataset_info.get('type')
+#         entity = dataset_info.get('entity')
+#         dataset = dataset_info.get('dataset')
+#         session = dataset_info.get('session')
+#         dataset_path = f"../data/{hop}/{type}/{entity}/{dataset}/{dataset}.json"    
+#         if key == "" or key is None: # 处理空或 None 的 key
+#             key = "ollama" # 默认 key
+#         print(f"Received /load_model: model={model_name}, key={'<default_ollama>' if key=='ollama' else '<provided>'}, dataset={dataset}") # 修正日志
+
+#         if not model_name: return jsonify({"status": "error", "message": "缺少模型名称"}), 400
+#         if not dataset:
+#             print("Warning: Dataset parameter is missing in /load_model request.")
+#             # 根据需要决定是否强制要求数据集
+#             # return jsonify({"status": "error", "message": "缺少数据集参数"}), 400
+
+#         # 关闭旧模型 (原始逻辑，简单替换引用)
+#         if current_model is not None:
+#             print(f"正在替换现有模型实例。")
+#             current_model = None # 允许垃圾回收
+
+#         # 加载新模型
+#         print(f"正在加载模型: {model_name} (API Key: {'*'*(len(key)-3)+key[-3:] if key != 'ollama' and key else 'ollama'}, 数据集: {dataset})")
+#         current_model = Demo_chat(model_name=model_name, api_key=key, dataset_name=dataset,dataset_path=dataset_path,path_name=session) # 传递数据集参数
+
+#         # 测试模型 (原始逻辑)
+#         test_result = current_model.chat_test() # 假设 chat_test 不需要输入
+#         print(f"模型测试结果: {test_result}")
+        
+#         def generate():
+#             # 发送初始状态
+#             yield json.dumps({"status": "start", "message": f"模型 {model_name} (数据集: {dataset}) 加载成功"}) + "\n"
+            
+#             # 处理每个项目并立即发送
+#             for item_data in current_model.new_history_chat():
+#                 yield json.dumps({"status": "processing", "item_data": item_data}) + "\n"
+            
+#             # 发送完成状态
+#             yield json.dumps({"status": "complete", "message": "所有项目处理完成"}) + "\n"
+
+#         return Response(generate(), mimetype='text/event-stream')
+
+#     except Exception as e:
+#         print(f"加载模型时出错: {e}")
+#         traceback.print_exc() # 打印完整错误堆栈
+#         return jsonify({"status": "error", "message": str(e)}), 500
+
+
 @app.route('/load_model', methods=['POST'])
 def load_model():
     global current_model
     try:
         data = request.json
+        mode = data.get("mode")
+        if mode == "Stop":
+            # 假设 Demo_chat 中有 close() 方法来停止模型的操作
+            if current_model is not None:
+                print("Stopping the current model.")
+                current_model.close()  # 调用 Demo_chat 中的关闭模型的方法
+                current_model = None
+                return jsonify({"status": "success", "message": "模型已停止"}), 200
+            else:
+                return jsonify({"status": "error", "message": "没有正在运行的模型"}), 400
+        
         model_name = data.get("model_name")
-        url = data.get("url") # url 在 Demo_chat 中似乎未使用 (原始注释)
         key = data.get("key")
-        dataset_info = data.get("dataset") # 获取数据集名称
+        dataset_info = data.get("dataset")
         hop = dataset_info.get('hop')
         type = dataset_info.get('type')
         entity = dataset_info.get('entity')
         dataset = dataset_info.get('dataset')
         session = dataset_info.get('session')
-        dataset_path = f"../data/{hop}/{type}/{entity}/{dataset}/{dataset}.json"    
-        if key == "" or key is None: # 处理空或 None 的 key
-            key = "ollama" # 默认 key
-        print(f"Received /load_model: model={model_name}, key={'<default_ollama>' if key=='ollama' else '<provided>'}, dataset={dataset}") # 修正日志
+        dataset_path = f"../data/{hop}/{type}/{entity}/{dataset}/{dataset}.json"  
+        if key == "" or key is None:  # 处理空或 None 的 key
+            key = "ollama"  # 默认 key
+        print(f"Received /load_model: model={model_name}, key={'<default_ollama>' if key=='ollama' else '<provided>'}, dataset={dataset}")
 
-        if not model_name: return jsonify({"status": "error", "message": "缺少模型名称"}), 400
+        if not model_name:
+            return jsonify({"status": "error", "message": "缺少模型名称"}), 400
         if not dataset:
             print("Warning: Dataset parameter is missing in /load_model request.")
-            # 根据需要决定是否强制要求数据集
-            # return jsonify({"status": "error", "message": "缺少数据集参数"}), 400
-
-        # 关闭旧模型 (原始逻辑，简单替换引用)
-        if current_model is not None:
-            print(f"正在替换现有模型实例。")
-            current_model = None # 允许垃圾回收
-
-        # 加载新模型
+        
         print(f"正在加载模型: {model_name} (API Key: {'*'*(len(key)-3)+key[-3:] if key != 'ollama' and key else 'ollama'}, 数据集: {dataset})")
-        current_model = Demo_chat(model_name=model_name, api_key=key, dataset_name=dataset,dataset_path=dataset_path,path_name=session) # 传递数据集参数
+        current_model = Demo_chat(model_name=model_name, api_key=key, dataset_name=dataset, dataset_path=dataset_path, path_name=session)
 
-        # 测试模型 (原始逻辑)
-        test_result = current_model.chat_test() # 假设 chat_test 不需要输入
-        print(f"模型测试结果: {test_result}")
-        current_model.new_history_chat()
-        return jsonify({"status": "success", "message": f"模型 {model_name} (数据集: {dataset}) 加载成功"}), 200
+        
+
+        def generate():
+            # 发送初始状态
+            yield json.dumps({"status": "start", "message": f"模型 {model_name} (数据集: {dataset}) 加载成功"}) + "\n"
+            
+            # 处理每个项目并立即发送
+            for item_data in current_model.new_history_chat(mode = mode):
+                yield json.dumps({"status": "processing", "item_data": item_data}) + "\n"
+            
+            # 发送完成状态
+            yield json.dumps({"status": "complete", "message": "所有项目处理完成"}) + "\n"
+
+        return Response(generate(), mimetype='text/event-stream')
+
+
+
+
+
+
+
 
     except Exception as e:
         print(f"加载模型时出错: {e}")
-        traceback.print_exc() # 打印完整错误堆栈
+        traceback.print_exc()
         return jsonify({"status": "error", "message": str(e)}), 500
+
+
+
 
 
 # --- 新增: 会话和历史记录 API 接口 (使用内存模拟) ---

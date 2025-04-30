@@ -905,6 +905,28 @@ body {
 .run-button:hover:not(:disabled) {
     background-color: #7ab0d1;
 }
+.continue-button {
+    width: 100%;
+    padding: 10px;
+    font-size: 0.9em;
+    border: none;
+    border-radius: 5px;
+    background-color: #8FC0DA;
+    color: white;
+    cursor: pointer;
+    margin-top: 10px;
+    font-weight: bold;
+    flex-shrink: 0;
+}
+
+.continue-button:disabled {
+    background-color: #ccc;
+    cursor: not-allowed;
+}
+
+.continue-button:hover:not(:disabled) {
+    background-color: #7ab0d1;
+}
 
 .resize-toggle {
     opacity: 0.3;
@@ -1038,6 +1060,11 @@ body {
     }
 
     .run-button {
+        width: auto;
+        margin: 10px;
+        flex-basis: calc(100% - 20px);
+    }
+    .continue-button {
         width: auto;
         margin: 10px;
         flex-basis: calc(100% - 20px);

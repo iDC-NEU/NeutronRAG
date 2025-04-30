@@ -5,6 +5,8 @@ const USE_BACKEND_HISTORY = true;
 // --- 常量与全局变量 ---
 const sendButton = document.getElementById("send-button");
 const applySettingsButton = document.getElementById("applySettingsButton");
+const ContinuegenetationButton = document.getElementById("ContinuegenetationButton");
+const StopButton = document.getElementById("StopButton");
 const userInput = document.getElementById("user-input");
 const ragSelect = document.getElementById("rag-select");
 const currentAnswerContent = document.getElementById('current-answer-content');
@@ -232,6 +234,8 @@ function updateDatasetSelection() {
     let datasets = [];
     selectedDatasetName = null;
     applySettingsButton.disabled = true;
+    ContinuegenetationButton.disabled = true;
+    StopButton.disabled = true;
     selectedDatasetsList.innerHTML = '<li>请先选择以上维度...</li>';
     if (!dim1Value) {
         clearSelect(dim2Select);
@@ -271,7 +275,8 @@ function handleDatasetOptionClick(event) {
     li.classList.add('selected-dataset');
     selectedDatasetName = datasetName;
     console.log("选择的数据集:", selectedDatasetName);
-    applySettingsButton.disabled = false;    
+    applySettingsButton.disabled = false;
+    ContinuegenetationButton.disabled = false;    
     fetch('/list-history', {
         method: 'POST',
         headers: {
@@ -326,6 +331,31 @@ async function initializeHistory() {
     }
 }
 
+async function updateSessionsList() {
+    try {
+        const response = await fetch('/list-history', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                selectedDatasetName: selectedDatasetName
+            })
+        });
+
+        const data = await response.json();
+        sessionsList = data.files || [];
+        console.log("✅ sessionsList 已更新:", sessionsList);
+
+        if (sessionsList.length === 0) {
+            alert("未找到历史记录文件");
+        }
+    } catch (error) {
+        console.error("❌ 获取 sessionsList 失败:", error);
+        alert("无法获取历史记录，请检查网络或服务器状态");
+    }
+}
+
 async function fetchSessionsAPI() {
     // #backend-integration: GET /api/sessions
     console.log("(API 模式) 正在获取会话列表...");
@@ -344,13 +374,14 @@ async function fetchSessionsAPI() {
     }
 }
 
-function populateSessionDropdown() {
+async function populateSessionDropdown() {
     historySessionSelect.innerHTML = '';
     if (USE_BACKEND_HISTORY) {
-        console.log("(API 模式) 正在根据 API 数据填充下拉菜单");
+        console.log("(API 模式) 正在根据 API 数据填充下拉菜单",sessionsList);
         if (sessionsList.length === 0) { historySessionSelect.innerHTML = '<option value="">无可用会话</option>'; return; }
         sessionsList.forEach(session => {
             const option = document.createElement('option');
+            console.log("value",session)
             option.value = session; option.textContent = session; historySessionSelect.appendChild(option);
         });
         if (currentSession && sessionsList.includes(currentSession)) {
@@ -453,7 +484,9 @@ async function displaySessionHistory() {
         }
         div.style.backgroundColor = backgroundColor;
 
-        const answerSnippet = item.answer ? item.answer.substring(0, 30) + '...' : '';
+        const answerText = typeof item.answer === 'string' ? item.answer : 
+                          item.answer ? JSON.stringify(item.answer) : '';
+        const answerSnippet = answerText ? answerText.substring(0, 30) + '...' : '';
         current_vector_response = item.vector_response
         current_graph_response = item.graph_response
         current_hybrid_response = item.hybrid_response
@@ -470,6 +503,51 @@ async function displaySessionHistory() {
         questionList.appendChild(div);
     });
 }
+
+function incrementallyDisplayNewHistoryItem(historyItem) {
+    const listItems = questionList.querySelectorAll('li');
+    listItems.forEach(item => item.remove()); 
+    const div = document.createElement('div');
+    div.classList.add('question-item');
+    div.id = `history-${historyItem.id}`;
+    div.dataset.itemId = historyItem.id;
+
+    // 设置背景颜色
+    let backgroundColor = '#f0f0f0';
+    switch (historyItem.type?.toUpperCase()) {
+        case 'GREEN': backgroundColor = '#d9f7be'; break;
+        case 'RED': backgroundColor = '#ffccc7'; break;
+        case 'YELLOW': backgroundColor = '#fff2e8'; break;
+    }
+    div.style.backgroundColor = backgroundColor;
+
+    const answerText = typeof historyItem.answer === 'string' ? historyItem.answer : 
+                      historyItem.answer ? JSON.stringify(historyItem.answer) : '';
+    const answerSnippet = answerText ? answerText.substring(0, 30) + '...' : '';
+    
+    // Store these values globally if needed (optional based on context)
+    current_vector_response = historyItem.vector_response;
+    current_graph_response = historyItem.graph_response;
+    current_hybrid_response = historyItem.hybrid_response;
+
+    div.innerHTML = `
+        <p>ID: ${historyItem.id}</p>
+        <p>Query: ${historyItem.query || 'N/A'}</p>
+        <p>V::${historyItem.vector_response}</p>
+        <p>G:${historyItem.graph_response}</p>
+        <p>H:${historyItem.hybrid_response}</p>
+        ${answerSnippet ? `<p>Ans: ${answerSnippet}</p>` : ''}
+    `;
+
+    // Add click event listener
+    div.addEventListener('click', handleHistoryItemClick);
+
+    // Add the new item directly to the questionList
+    questionList.appendChild(div); // Insert it at the top (or use appendChild() for bottom)
+}
+
+
+
 
 async function handleConfirmNewSession() {
     const name = newSessionNameInput.value.trim();
@@ -505,12 +583,10 @@ async function handleConfirmNewSession() {
             // 解析响应
             const createdSession = await response.json();
             console.log("(API 模式) 新会话已创建:", createdSession);
-
-            // 获取并刷新会话数据
-            // await fetchSessionsAPI();
-            currentHistorySessionName = createdSession.name;
-
-            // 更新 UI
+            console.log("开始更新sessionList")
+            await updateSessionsList();
+            console.log("更新完成",sessionsList)
+            console.log("开始渲染下拉框")
             await populateSessionDropdown();
             await displaySessionHistory();
         } catch (error) {
@@ -634,9 +710,30 @@ function hideNewSessionInput() {
     isAddingNewSession = false;
     newSessionInputContainer.style.display = 'none';
     newHistorySessionButton.style.display = 'inline-block';
+
 }
 
 // --- 核心交互逻辑 ---
+
+sendButton.addEventListener("click", async () => {
+    if (!isGenerating) {
+        const query = userInput.value.trim(); if (!query) { console.warn("请输入查询内容。"); return; }
+        sendButton.textContent = "生成中..."; sendButton.disabled = true; isGenerating = true;
+        abortController = new AbortController(); let signal = abortController.signal;
+        currentAnswers = { query: query, vector: "", graph: "", hybrid: "" }; displaySelectedAnswer();
+        let generatedData = {}; let historyItemType = 'RED'; let historyItemAnswer = '生成过程中出错'; let fetchError = null;
+        try {
+            // #backend-integration: POST /generate
+            const response = await fetch("/generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ input: query }), signal: signal });
+            if (response.ok) { generatedData = await response.json(); updateAnswerStore(generatedData); displaySelectedAnswer(); historyItemType = 'GREEN'; historyItemAnswer = currentAnswers[ragSelect.value] || generatedData.vectorAnswer || "N/A"; }
+            else { const errorText = await response.text(); historyItemAnswer = `错误: ${errorText}`; fetchError = new Error(`网络响应不成功: ${response.status} ${errorText}`); currentAnswers = { query: query, vector: "错误", graph: "错误", hybrid: "错误" }; displaySelectedAnswer(); }
+        } catch (error) { fetchError = error; if (error.name === "AbortError") { console.log("用户中止了 Fetch 请求。"); historyItemAnswer = "生成已取消"; historyItemType = 'YELLOW'; } else { console.error("Fetch 错误:", error); currentAnswers = { query: query, vector: "错误", graph: "错误", hybrid: "错误" }; displaySelectedAnswer(); if (!error.message?.includes('Network response')) { historyItemAnswer = `错误: ${error.message || '未知 Fetch 错误'}`; } } }
+        finally {
+            await addInteractionToHistory(query, historyItemAnswer, historyItemType, { vectorAnswer: generatedData.vectorAnswer || currentAnswers.vector, graphAnswer: generatedData.graphAnswer || currentAnswers.graph, hybridAnswer: generatedData.hybridAnswer || currentAnswers.hybrid });
+            sendButton.textContent = "Send"; sendButton.disabled = false; isGenerating = false; if (fetchError && fetchError.name !== "AbortError") { console.error("生成失败:", fetchError); }
+        }
+    } else { abortController.abort(); }
+});
 
 sendButton.addEventListener("click", async () => {
     if (!isGenerating) {
@@ -670,7 +767,9 @@ applySettingsButton.addEventListener("click", async () => {
         alert("请完整选择三个下拉框的内容！");
         return;
     }
-        // try {
+    questionList.innerHTML = ''
+    historySessions[currentSession] = []
+        
     const postData = {
         hop: hop,
         type: type,
@@ -678,25 +777,12 @@ applySettingsButton.addEventListener("click", async () => {
         dataset: selectedDatasetName,
         session: currentSession
     };
-    // try {
-    //     const postData = {
-    //         hop: hop,
-    //         type: type,
-    //         entity: entity,
-    //         dataset: selectedDatasetName
-    //     };
-    //     fetch('/get-dataset', {
-    //         method: 'POST',
-    //         headers: {
-    //             'Content-Type': 'application/json'
-    //         },
-    //         body: JSON.stringify(postData)
-    //     }).catch(error => {
-    //         console.error("请求失败:", error);
-    //     });    
+
     applySettingsButton.disabled = true; 
     applySettingsButton.textContent = "应用中..."; 
     adviceContent.innerHTML = "正在加载建议...";
+    StopButton.disabled = false
+    ContinuegenetationButton.disabled = true
 
 
     
@@ -712,10 +798,284 @@ applySettingsButton.addEventListener("click", async () => {
         pruning: document.getElementById("pruning").value === "yes", 
         strategy: document.getElementById("strategy").value || "union", 
         vector_proportion: parseFloat(document.getElementById("vector-proportion").value) || 0.9, 
-        graph_proportion: parseFloat(document.getElementById("graph-proportion").value) || 0.8 
+        graph_proportion: parseFloat(document.getElementById("graph-proportion").value) || 0.8,
+        mode: "rewrite"
     };
     
     console.log("正在应用设置:", settingsData);
+    
+    try {
+        historySessions[currentSession] = []; 
+        const response = await fetch("/load_model", { 
+            method: "POST", 
+            headers: { "Content-Type": "application/json" }, 
+            body: JSON.stringify(settingsData) 
+        });
+        
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`应用设置失败: ${response.status} ${errorText}`);
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+
+        while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            
+            const chunk = decoder.decode(value);
+            const lines = chunk.split('\n');
+            
+            for (const line of lines) {
+                if (!line.trim()) continue;
+                
+                try {
+                    const data = JSON.parse(line);
+                    switch (data.status) {
+                        case 'start':
+                            console.log('开始处理:', data.message);
+                            adviceContent.innerHTML = `<p>${data.message}</p>`;
+                            break;
+                        case 'processing':
+                            // 处理每个项目的数据并存储到当前会话
+                            if (data.item_data) {
+                                const historyItem = {
+                                    id: data.item_data.id,
+                                    query: data.item_data.query,
+                                    answer: data.item_data.answer,
+                                    type: data.item_data.type,
+                                    details: {
+                                        vectorAnswer: data.item_data.vector_response,
+                                        graphAnswer: data.item_data.graph_response,
+                                        hybridAnswer: data.item_data.hybrid_response,
+                                        vectorRetrieval: data.item_data.vector_retrieval_result,
+                                        graphRetrieval: data.item_data.graph_retrieval_result,
+                                        vectorEvaluation: data.item_data.vector_evaluation,
+                                        graphEvaluation: data.item_data.graph_evaluation,
+                                        hybridEvaluation: data.item_data.hybrid_evaluation,
+                                        avgVectorEvaluation: data.item_data.avg_vector_evaluation,
+                                        avgGraphEvaluation: data.item_data.avg_graph_evaluation,
+                                        avgHybridEvaluation: data.item_data.avg_hybrid_evaluation
+                                    },
+                                    timestamp: new Date().toISOString()
+                                };
+                                
+                                // 添加到当前会话
+                             
+                                historySessions[currentSession].push(historyItem);
+                                
+                                // 更新UI显示,这里应该做一个增量的修改，不需要再去读取文件了直接把新生成的item 放入questionList
+                                incrementallyDisplayNewHistoryItem(historyItem);
+                                
+                                // 更新处理状态显示
+                                adviceContent.innerHTML = `<p>正在处理: ${data.item_data.query}</p>`;
+                            }
+                            break;
+                        case 'complete':
+                            console.log('处理完成:', data.message);
+                            adviceContent.innerHTML = `<p>${data.message}</p>`;
+                            applySettingsButton.innerText = "Apply Settings"
+                            StopButton.disabled = true
+                            break;
+                        case 'error':
+                            console.error('发生错误:', data.message);
+                            adviceContent.innerHTML = `<p class="error">错误: ${data.message}</p>`;
+                            break;
+                    }
+                } catch (error) {
+                    console.error('解析响应数据时出错:', error);
+                    adviceContent.innerHTML = `<p class="error">解析数据时出错: ${error.message}</p>`;
+                }
+            }
+        }
+        
+    } catch (error) { 
+        console.error("应用设置时发生错误:", error); 
+        alert(`发生错误: ${error.message}`); 
+        adviceContent.innerHTML = `应用设置时发生错误: ${error.message}`; 
+    } finally { 
+        applySettingsButton.disabled = false; 
+        ContinuegenetationButton.disabled = false; 
+        StopButton.disabled = true; 
+        ContinuegenetationButton.textContent = "Continue Generation"; 
+    }
+});
+
+ContinuegenetationButton.addEventListener("click", async () => {
+    if (!selectedDatasetName) { 
+        alert("请在选择所有维度后，从列表中选择一个数据集。"); 
+        return; 
+    }
+    const hop = document.getElementById("dim1-hops").value;
+    const type = document.getElementById("dim2-task").value;
+    const entity = document.getElementById("dim3-scale").value;
+    if (!hop || !type || !entity ||!selectedDatasetName) {
+        alert("请完整选择三个下拉框的内容！");
+        return;
+    }
+        
+    const postData = {
+        hop: hop,
+        type: type,
+        entity: entity,
+        dataset: selectedDatasetName,
+        session: currentSession
+    };
+
+    ContinuegenetationButton.disabled = true; 
+    ContinuegenetationButton.textContent = "应用中..."; 
+    adviceContent.innerHTML = "正在加载建议...";
+    StopButton.disabled = false
+    applySettingsButton.disabled = true
+
+
+    
+    const settingsData = { 
+        dataset: postData,
+        model_name: modelSelect.value, 
+        key: apiKeyInput.value, 
+        top_k: parseInt(document.getElementById("top-k").value) || 5, 
+        threshold: parseFloat(document.getElementById("similarity-threshold").value) || 0.8, 
+        chunksize: parseInt(document.getElementById("chunk-size").value) || 128, 
+        k_hop: parseInt(document.getElementById("k-hop").value) || 1, 
+        max_keywords: parseInt(document.getElementById("max-keywords").value) || 10, 
+        pruning: document.getElementById("pruning").value === "yes", 
+        strategy: document.getElementById("strategy").value || "union", 
+        vector_proportion: parseFloat(document.getElementById("vector-proportion").value) || 0.9, 
+        graph_proportion: parseFloat(document.getElementById("graph-proportion").value) || 0.8,
+        mode: "continue"
+    };
+    
+    console.log("正在应用设置:", settingsData);
+    
+    try {
+        historySessions[currentSession] = []; 
+        const response = await fetch("/load_model", { 
+            method: "POST", 
+            headers: { "Content-Type": "application/json" }, 
+            body: JSON.stringify(settingsData) 
+        });
+        
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`应用设置失败: ${response.status} ${errorText}`);
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+
+        while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            
+            const chunk = decoder.decode(value);
+            const lines = chunk.split('\n');
+            
+            for (const line of lines) {
+                if (!line.trim()) continue;
+                
+                try {
+                    const data = JSON.parse(line);
+                    switch (data.status) {
+                        case 'start':
+                            console.log('开始处理:', data.message);
+                            adviceContent.innerHTML = `<p>${data.message}</p>`;
+                            break;
+                        case 'processing':
+                            // 处理每个项目的数据并存储到当前会话
+                            if (data.item_data) {
+                                const historyItem = {
+                                    id: data.item_data.id,
+                                    query: data.item_data.query,
+                                    answer: data.item_data.answer,
+                                    type: data.item_data.type,
+                                    details: {
+                                        vectorAnswer: data.item_data.vector_response,
+                                        graphAnswer: data.item_data.graph_response,
+                                        hybridAnswer: data.item_data.hybrid_response,
+                                        vectorRetrieval: data.item_data.vector_retrieval_result,
+                                        graphRetrieval: data.item_data.graph_retrieval_result,
+                                        vectorEvaluation: data.item_data.vector_evaluation,
+                                        graphEvaluation: data.item_data.graph_evaluation,
+                                        hybridEvaluation: data.item_data.hybrid_evaluation,
+                                        avgVectorEvaluation: data.item_data.avg_vector_evaluation,
+                                        avgGraphEvaluation: data.item_data.avg_graph_evaluation,
+                                        avgHybridEvaluation: data.item_data.avg_hybrid_evaluation
+                                    },
+                                    timestamp: new Date().toISOString()
+                                };
+
+                                // 添加到当前会话
+                                historySessions[currentSession].push(historyItem);
+                                
+                                // 更新UI显示,这里应该做一个增量的修改，不需要再去读取文件了直接把新生成的item 放入questionList
+                                incrementallyDisplayNewHistoryItem(historyItem);
+                                
+                                // 更新处理状态显示
+                                adviceContent.innerHTML = `<p>正在处理: ${data.item_data.query}</p>`;
+                            }
+                            break;
+                        case 'complete':
+                            console.log('处理完成:', data.message);
+                            adviceContent.innerHTML = `<p>${data.message}</p>`;
+                            applySettingsButton.innerText = "Apply Settings"
+                            StopButton.disabled = true
+                            break;
+                        case 'error':
+                            console.error('发生错误:', data.message);
+                            adviceContent.innerHTML = `<p class="error">错误: ${data.message}</p>`;
+                            break;
+                    }
+                } catch (error) {
+                    console.error('解析响应数据时出错:', error);
+                    adviceContent.innerHTML = `<p class="error">解析数据时出错: ${error.message}</p>`;
+                }
+            }
+        }
+        
+    } catch (error) { 
+        console.error("应用设置时发生错误:", error); 
+        alert(`发生错误: ${error.message}`); 
+        adviceContent.innerHTML = `应用设置时发生错误: ${error.message}`; 
+    } finally { 
+        applySettingsButton.disabled = false; 
+        ContinuegenetationButton.disabled = false; 
+        StopButton.disabled = true; 
+        ContinuegenetationButton.textContent = "Continue Generation"; 
+    }
+});
+
+
+
+
+StopButton.addEventListener("click", async () => {
+    const hop = document.getElementById("dim1-hops").value;
+    const type = document.getElementById("dim2-task").value;
+    const entity = document.getElementById("dim3-scale").value;
+    if (!hop || !type || !entity ||!selectedDatasetName) {
+        alert("请完整选择三个下拉框的内容！");
+        return;
+    }
+        // try {
+    const postData = {
+        hop: hop,
+        type: type,
+        entity: entity,
+        dataset: selectedDatasetName,
+        session: currentSession
+    };
+    ContinuegenetationButton.disabled = true; 
+    ContinuegenetationButton.textContent = "应用中..."; 
+    adviceContent.innerHTML = "正在加载建议...";
+
+
+    
+    const settingsData = { 
+        mode: "Stop"
+    };
+    
+    console.log("正在停止生成:", settingsData);
     
     try {
         // 修复1: 直接使用 fetch 和 await，不需要 Promise.allSettled
@@ -742,9 +1102,15 @@ applySettingsButton.addEventListener("click", async () => {
         adviceContent.innerHTML = `应用设置时发生错误: ${error.message}`; 
     } finally { 
         applySettingsButton.disabled = false; 
-        applySettingsButton.textContent = "Apply Settings"; 
+        ContinuegenetationButton.disabled = false; 
+        StopButton.disabled = false; 
+        ContinuegenetationButton.textContent = "Continue Generation"; 
     }
 });
+
+
+
+
 
 // --- 检索结果显示逻辑 ---
 
@@ -962,6 +1328,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     clearSelect(dim3Select);
     updateDatasetSelection();
     applySettingsButton.disabled = true;
+    ContinuegenetationButton.disabled = true;
     await initializeHistory(); // 初始化历史记录区域 (根据 USE_BACKEND_HISTORY 决定行为)
     displaySelectedAnswer();
 });
