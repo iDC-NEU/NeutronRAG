@@ -29,7 +29,7 @@ from llmragenv.demo_chat import Demo_chat
 import threading
 import traceback
 
-app = Flask(__name__)
+app = Flask(__name__, static_url_path='/static', static_folder='static')
 app.secret_key = 'ac1e22dfb44b87ef38f5bf2cd1cb0c6f93bb0a67f1b2d8f7'  # 用于 flash 消息
 CORS(app) # Enable CORS for all routes
 

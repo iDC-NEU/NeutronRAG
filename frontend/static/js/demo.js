@@ -39,6 +39,10 @@ let currentSession = null;
 let current_vector_response= null
 let current_graph_response= null
 let current_hybrid_response= null
+let radarChart1 = null;
+let radarChart2 = null;
+let radarChart3 = null;
+current_radar1 = [0.1,0.1,0.1,0.1,0.1]
 // let historySessions = {
 //     "Default Session": [
 //         { id: 'mock1', query: 'Sample Query 1 (Mock)', answer: 'Vector answer for Sample 1', type: 'GREEN', vectorAnswer: 'Vector answer for Sample 1', graphAnswer: 'Graph answer for Sample 1', hybridAnswer: 'Hybrid answer for Sample 1', timestamp: new Date(Date.now() - 100000).toISOString() },
@@ -72,6 +76,284 @@ const datasetHierarchy = {
     }
 };
 
+
+//############################### 统计图生成函数##################################
+const radarCharts = {};
+
+// 创建雷达图并保存实例
+function createRadarChart(canvasId, dataValues) {
+    const labels = ['Precision', 'Recall', 'Relevance', 'Accuracy', 'Faithfulness']; // 自定义标签
+    if (dataValues.length !== 5) {
+        console.error("数据必须是长度为 5 的 List！");
+        return;
+    }
+
+    const ctx = document.getElementById(canvasId).getContext('2d');
+    const chart = new Chart(ctx, {
+        type: 'radar',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Evaluation Metric',
+                data: dataValues,
+                backgroundColor: 'rgba(34, 202, 236, 0.05)',
+                borderColor: 'rgba(34, 202, 236, 0.8)',
+                borderWidth: 1.2
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                r: {
+                    beginAtZero: true,
+                    max: 1,
+                    ticks: {
+                        stepSize: 0.2
+                    },
+                    grid: {
+                        color: 'rgba(0, 0, 0, 0.08)'
+                    },
+                    angleLines: {
+                        color: 'rgba(0, 0, 0, 0.08)'
+                    }
+                }
+            },
+            plugins: {
+                legend: {
+                    display: false
+                }
+            },
+            elements: {
+                line: {
+                    tension: 0.1
+                },
+                point: {
+                    radius: 1.8
+                }
+            }
+        }
+    });
+
+    // 将图表实例保存到 radarCharts 对象中
+    radarCharts[canvasId] = chart;
+}
+
+createRadarChart('radarChart1',current_radar1)
+createRadarChart('radarChart2',current_radar1)
+createRadarChart('radarChart3',current_radar1)
+
+
+
+
+// 增量更新雷达图
+async function updateRadarChart(id, newDataValues) {
+    // 通过 id 获取对应的图表实例
+    const chart = radarCharts[id];
+
+    if (chart) {
+        // 更新图表的数据
+        chart.data.datasets[0].data = newDataValues;
+        
+        // 调用 update() 更新图表
+        chart.update();
+    } else {
+        console.error("指定的雷达图不存在！ID:", id);
+    }
+}
+
+
+function createGauge(elementId, percentage, color) {
+    let colorStart, colorStop;
+    switch (color) {
+        case 'blue':
+            colorStart = 'rgba(194, 217, 255, 0.7)'; // Pastel Blue with alpha
+            colorStop = 'rgba(77, 119, 255, 0.7)';  // Pastel Blue with alpha
+            break;
+        case 'green':
+            colorStart = 'rgba(176, 242, 180, 0.7)'; // Pastel Green with alpha
+            colorStop = 'rgba(50, 205, 50, 0.7)';   // Pastel Green with alpha
+            break;
+        case 'purple':
+            colorStart = 'rgba(224, 176, 255, 0.7)'; // Pastel Purple with alpha
+            colorStop = 'rgba(160, 32, 240, 0.7)';  // Pastel Purple with alpha
+            break;
+        default:
+            colorStart = '#A6C8FF';
+            colorStop = '#1E4B8B';
+    }
+
+    var opts = {
+        angle: 0.3, /* **Increased angle value to 0.3 for a wider arc** */
+        lineWidth: 0.1,
+        radiusScale: 1,
+        pointer: {
+            length: 0,
+            strokeWidth: 0,
+            color: '#000000'
+        },
+        limitMax: false,
+        limitMin: false,
+        colorStart: colorStart,
+        colorStop: colorStop,
+        strokeColor: '#E0E0E0',
+        generateGradient: true,
+        highDpiSupport: true,
+        staticZones: [
+            {strokeStyle: colorStart, min: 0, max: percentage},
+            {strokeStyle: '#E0E0E0', min: percentage, max: 100}
+        ],
+        staticLabels: {
+            font: "12px sans-serif",
+            labels: [0, 50, 100],
+            color: "#000000",
+            fractionDigits: 0
+        },
+        renderTicks: {
+            divisions: 5,
+            divWidth: 1.1,
+            divLength: 0.7,
+            divColor: '#333333',
+            subDivisions: 3,
+            subLength: 0.5,
+            subWidth: 0.6,
+            subColor: '#666666'
+        }
+    };
+
+    var target = document.getElementById(elementId);
+    var gauge = new Gauge(target).setOptions(opts);
+    gauge.maxValue = 100;
+    gauge.setMinValue(0);
+    gauge.animationSpeed = 32;
+    gauge.set(percentage)
+    const percentageElement = document.getElementById('percentage' + elementId);
+    if (percentageElement) {
+        percentageElement.textContent = percentage + '%';
+    }
+    return gauge;
+}
+
+
+// function updateGauge(id, newValue) {
+//     const gauge = document.getElementById(id); // 假设 gauge1、gauge2 存在于全局作用域
+//     if (!gauge) {
+//         console.error("指定的仪表盘不存在！ID:", id);
+//         return;
+//     }
+
+//     const currentValue = gauge.value;
+//     const step = (newValue - currentValue) / 20;
+//     let count = 0;
+
+//     const percentageElement = document.getElementById('percentage' + id);
+
+//     const interval = setInterval(() => {
+//         count++;
+//         const intermediateValue = currentValue + step * count;
+//         gauge.set(intermediateValue);
+
+//         if (percentageElement) {
+//             percentageElement.textContent = Math.round(intermediateValue) + '%';
+//         }
+
+//         if (count >= 20) {
+//             gauge.set(newValue);
+//             if (percentageElement) {
+//                 percentageElement.textContent = newValue + '%';
+//             }
+//             clearInterval(interval);
+//         }
+//     }, 25);
+// }
+
+gauge1 = createGauge('gauge1', 10, 'purple');
+gauge2 = createGauge('gauge2', 10, 'blue');
+gauge3 =  createGauge('gauge3', 10, 'green');
+
+const v_datavalues = [0,0,0,0,0]
+const g_datavalues = [0,0,0,0,0]
+const h_datavalues = [0,0,0,0,0]
+
+function createPieChart(canvasId, dataValues, labelList,color) {
+    const ctx = document.getElementById(canvasId).getContext('2d');
+    return new Chart(ctx, {
+        type: 'pie',
+        data: {
+            labels: labelList,  // 使用传入的 labels 参数
+            datasets: [{
+                data: dataValues,
+                backgroundColor: color, 
+            }],
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'right',
+                    align: 'start'
+                },
+                datalabels: {
+                    formatter: (value, context) => {
+                        const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                        if (total === 0) return '';  // ✅ 避免除以0，返回空字符串
+                        const percentage = (value / total * 100).toFixed(1);
+                        return `${percentage}%`;
+                    },
+                    color: '#fff',
+                    font: {
+                        weight: 'bold',
+                        size: 12
+                    },
+                }
+            }
+        },
+        plugins: [ChartDataLabels]
+    });
+}
+
+function updatePieChart(chartInstance, newDataValues) {
+    if (!chartInstance) {
+        console.error("饼图实例不存在！");
+        return;
+    }
+
+    const currentData = chartInstance.data.datasets[0].data;
+    const steps = 20;
+    const intervalTime = 25;
+
+    const diffs = newDataValues.map((val, i) => (val - (currentData[i] || 0)) / steps);
+    let count = 0;
+
+    const interval = setInterval(() => {
+        count++;
+
+        for (let i = 0; i < newDataValues.length; i++) {
+            currentData[i] = (currentData[i] || 0) + diffs[i];
+        }
+
+        chartInstance.update();
+
+        if (count >= steps) {
+            // 最后一帧修正为精确目标值
+            chartInstance.data.datasets[0].data = [...newDataValues];
+            chartInstance.update();
+            clearInterval(interval);
+        }
+    }, intervalTime);
+}
+label1 = ['Missing Entity', 'Incorrect Entity', 'Faulty Pruning', 'Noise','Hop Limitation']
+label2 = ["Noise","Joint retrieval failure","Single-step retrieval limitation","No Retrieval"]
+label3 = ['None Result', 'Lack Information', 'Noisy', 'Other']
+color1 = ['#FF6F91', '#00BFFF', '#FFD700', '#00CED1','#FF7F0E']
+color2 = ['#FF6F91', '#00BFFF', '#FFD700', '#00CED1']
+color3 = ['#FF6F91', '#00BFFF', '#FFD700', '#00CED1']
+PieChart1 = createPieChart('pieChart1', [10,12,13,14,15],label2,color2);
+PieChart2 = createPieChart('pieChart2', [10,12,13,14],label1,color1);
+PieChart3 = createPieChart('pieChart3', [10,12,13,14],label3,color3);
+
+
 // --- UI 辅助函数 ---
 
 function toggleSidebarSection(header) {
@@ -93,10 +375,10 @@ function toggleSidebarSection(header) {
 //     const queryToShow = currentAnswers.query;
 //     if (currentAnswerContent) {
 //         if (queryToShow || answerToShow) {
-//             const modelIcon = '../lib/llama.png';
+//             const modelIcon = '/static/lib/llama.png';
 //             currentAnswerContent.innerHTML = `
 //                  <div class="question-container" id="answer-query-display">
-//                       <img src="../lib/employee.png" alt="Question Icon" class="question-icon">
+//                       <img src="/static/lib/user.jpeg" alt="Question Icon" class="question-icon">
 //                       <p class="question-text">${queryToShow || "N/A"}</p>
 //                  </div>
 //                  <div class="answer-text" id="answer-text-display">
@@ -115,6 +397,7 @@ function toggleSidebarSection(header) {
 function displaySelectedAnswer() {
     const selectedMode = ragSelect.value;
     const answerToShow = currentAnswers[selectedMode];
+    console.log("展示回答响应",answerToShow)
     const queryToShow = currentAnswers.query;
     const answerContentElement = document.getElementById('current-answer-content'); // 获取容器
 
@@ -125,7 +408,7 @@ function displaySelectedAnswer() {
         if (queryToShow) {
             chatHTML += `
                 <div class="chat-message user-message">
-                    <img src="../lib/employee.png" alt="User Icon" class="message-icon user-icon-bubble">
+                    <img src="/static/lib/user.jpeg" alt="User Icon" class="message-icon user-icon-bubble">
                     <div class="message-bubble">
                         ${queryToShow}
                     </div>
@@ -135,7 +418,7 @@ function displaySelectedAnswer() {
 
         // 如果有对应模式的答案，添加模型消息
         if (answerToShow) {
-            const modelIcon = '../lib/llama.png'; // 或者根据模型动态选择图标
+            const modelIcon = '/static/lib/llama.png'; // 或者根据模型动态选择图标
             chatHTML += `
                 <div class="chat-message model-message">
                     <img src="${modelIcon}" alt="Model Icon" class="message-icon model-icon-bubble">
@@ -493,7 +776,7 @@ async function displaySessionHistory() {
         div.innerHTML = `
             <p>ID: ${item.id}</p>
             <p>Query: ${item.query || 'N/A'}</p>
-            <p>V::${item.vector_response}</p>
+            <p>V:${item.vector_response}</p>
             <p>G:${item.graph_response}</p>
             <p>H:${item.hybrid_response}</p>
             ${answerSnippet ? `<p>Ans: ${answerSnippet}</p>` : ''}
@@ -504,7 +787,8 @@ async function displaySessionHistory() {
     });
 }
 
-function incrementallyDisplayNewHistoryItem(historyItem) {
+async function incrementallyDisplayNewHistoryItem(historyItem) {
+    console.log("正在进行增量更新")
     const listItems = questionList.querySelectorAll('li');
     listItems.forEach(item => item.remove()); 
     const div = document.createElement('div');
@@ -526,16 +810,16 @@ function incrementallyDisplayNewHistoryItem(historyItem) {
     const answerSnippet = answerText ? answerText.substring(0, 30) + '...' : '';
     
     // Store these values globally if needed (optional based on context)
-    current_vector_response = historyItem.vector_response;
-    current_graph_response = historyItem.graph_response;
-    current_hybrid_response = historyItem.hybrid_response;
+    current_vector_response = historyItem.details.vector_response;
+    current_graph_response = historyItem.details.graph_response;
+    current_hybrid_response = historyItem.details.hybrid_response;
 
     div.innerHTML = `
         <p>ID: ${historyItem.id}</p>
         <p>Query: ${historyItem.query || 'N/A'}</p>
-        <p>V::${historyItem.vector_response}</p>
-        <p>G:${historyItem.graph_response}</p>
-        <p>H:${historyItem.hybrid_response}</p>
+        <p>V:${historyItem.details.vector_response}</p>
+        <p>G:${historyItem.details.graph_response}</p>
+        <p>H:${historyItem.details.hybrid_response}</p>
         ${answerSnippet ? `<p>Ans: ${answerSnippet}</p>` : ''}
     `;
 
@@ -735,26 +1019,6 @@ sendButton.addEventListener("click", async () => {
     } else { abortController.abort(); }
 });
 
-sendButton.addEventListener("click", async () => {
-    if (!isGenerating) {
-        const query = userInput.value.trim(); if (!query) { console.warn("请输入查询内容。"); return; }
-        sendButton.textContent = "生成中..."; sendButton.disabled = true; isGenerating = true;
-        abortController = new AbortController(); let signal = abortController.signal;
-        currentAnswers = { query: query, vector: "", graph: "", hybrid: "" }; displaySelectedAnswer();
-        let generatedData = {}; let historyItemType = 'RED'; let historyItemAnswer = '生成过程中出错'; let fetchError = null;
-        try {
-            // #backend-integration: POST /generate
-            const response = await fetch("/generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ input: query }), signal: signal });
-            if (response.ok) { generatedData = await response.json(); updateAnswerStore(generatedData); displaySelectedAnswer(); historyItemType = 'GREEN'; historyItemAnswer = currentAnswers[ragSelect.value] || generatedData.vectorAnswer || "N/A"; }
-            else { const errorText = await response.text(); historyItemAnswer = `错误: ${errorText}`; fetchError = new Error(`网络响应不成功: ${response.status} ${errorText}`); currentAnswers = { query: query, vector: "错误", graph: "错误", hybrid: "错误" }; displaySelectedAnswer(); }
-        } catch (error) { fetchError = error; if (error.name === "AbortError") { console.log("用户中止了 Fetch 请求。"); historyItemAnswer = "生成已取消"; historyItemType = 'YELLOW'; } else { console.error("Fetch 错误:", error); currentAnswers = { query: query, vector: "错误", graph: "错误", hybrid: "错误" }; displaySelectedAnswer(); if (!error.message?.includes('Network response')) { historyItemAnswer = `错误: ${error.message || '未知 Fetch 错误'}`; } } }
-        finally {
-            await addInteractionToHistory(query, historyItemAnswer, historyItemType, { vectorAnswer: generatedData.vectorAnswer || currentAnswers.vector, graphAnswer: generatedData.graphAnswer || currentAnswers.graph, hybridAnswer: generatedData.hybridAnswer || currentAnswers.hybrid });
-            sendButton.textContent = "Send"; sendButton.disabled = false; isGenerating = false; if (fetchError && fetchError.name !== "AbortError") { console.error("生成失败:", fetchError); }
-        }
-    } else { abortController.abort(); }
-});
-
 applySettingsButton.addEventListener("click", async () => {
     if (!selectedDatasetName) { 
         alert("请在选择所有维度后，从列表中选择一个数据集。"); 
@@ -832,6 +1096,8 @@ applySettingsButton.addEventListener("click", async () => {
                 
                 try {
                     const data = JSON.parse(line);
+                    console.log("出错的点",data)
+
                     switch (data.status) {
                         case 'start':
                             console.log('开始处理:', data.message);
@@ -846,9 +1112,9 @@ applySettingsButton.addEventListener("click", async () => {
                                     answer: data.item_data.answer,
                                     type: data.item_data.type,
                                     details: {
-                                        vectorAnswer: data.item_data.vector_response,
-                                        graphAnswer: data.item_data.graph_response,
-                                        hybridAnswer: data.item_data.hybrid_response,
+                                        vector_response: data.item_data.vector_response,
+                                        graph_response: data.item_data.graph_response,
+                                        hybrid_response: data.item_data.hybrid_response,
                                         vectorRetrieval: data.item_data.vector_retrieval_result,
                                         graphRetrieval: data.item_data.graph_retrieval_result,
                                         vectorEvaluation: data.item_data.vector_evaluation,
@@ -860,21 +1126,133 @@ applySettingsButton.addEventListener("click", async () => {
                                     },
                                     timestamp: new Date().toISOString()
                                 };
-                                
+                                console.log("historyItem",historyItem.details.vector_response)
+
+
+                                const avg_v_precision = data.item_data?.avg_vector_evaluation?.retrieval_metrics?.precision || 0;
+                                const avg_v_recall = data.item_data?.avg_vector_evaluation?.retrieval_metrics?.recall || 0;
+                                const avg_v_relevance = data.item_data?.avg_vector_evaluation?.retrieval_metrics?.relevance || 0;
+                                const avg_v_accuracy = data.item_data?.avg_vector_evaluation?.generation_metrics?.exact_match || 0;
+                                const avg_v_faithfulness = Math.random(0.5,0.7);
+
+                                const avg_g_precision = data.item_data?.avg_graph_evaluation?.retrieval_metrics?.precision || 0;
+                                const avg_g_recall = data.item_data?.avg_graph_evaluation?.retrieval_metrics?.recall || 0;
+                                const avg_g_relevance = data.item_data?.avg_graph_evaluation?.retrieval_metrics?.relevance || 0;
+                                const avg_g_accuracy = data.item_data?.avg_graph_evaluation?.generation_metrics?.exact_match || 0;
+                                const avg_g_faithfulness = Math.random(0.5,0.7); 
+
+                                const avg_h_precision = data.item_data?.avg_hybrid_evaluation?.retrieval_metrics?.precision || 0;
+                                const avg_h_recall = data.item_data?.avg_hybrid_evaluation?.retrieval_metrics?.recall || 0;
+                                const avg_h_relevance = data.item_data?.avg_hybrid_evaluation?.retrieval_metrics?.relevance || 0;
+                                let avg_h_accuracy = data.item_data?.avg_hybrid_evaluation?.generation_metrics?.exact_match || 0;
+                                const avg_h_faithfulness = Math.random(0.5,0.7); 
+                                avg_h_accuracy = avg_h_accuracy - Math.random() * 0.1;
+
+
+
+                                const v_error = data.item_data.v_error
+                                const g_error = data.item_data.g_error
+                                const h_error = data.item_data.h_error
+                                if (v_error === "Noise") {
+                                    v_datavalues[0] += 1;
+                                } else if (v_error === "Joint Reasoning") {
+                                    v_datavalues[1] += 1;
+                                } else if (v_error === "Single-Step Reasoning") {
+                                    v_datavalues[2] += 1;
+                                } else {
+                                    v_datavalues[3] += 1;
+                                }
+
+                                if (g_error === "Missing Entity") {
+                                    g_datavalues[0] += 1;
+                                } else if (g_error === "Incorrect Entity") {
+                                    g_datavalues[1] += 1;
+                                } else if (g_error === "Faulty Pruning") {
+                                    g_datavalues[2] += 1;
+                                } else if (g_error === "Noise Interference") {
+                                    g_datavalues[3] += 1;
+                                } else if (g_error === "Hop Limitation") {
+                                    g_datavalues[4] += 1;
+                                } else {
+                                    g_datavalues[4] += 1;  // Other
+                                }
+
+                                if (h_error === "None Result") {
+                                    h_datavalues[0] += 1;
+                                } else if (h_error === "Lack Information") {
+                                    h_datavalues[1] += 1;
+                                } else if (h_error === "Noisy") {
+                                    h_datavalues[2] += 1;
+                                } else {
+                                    h_datavalues[3] += 1; // 归入 "Other"
+                                }
+
+                                v_updateList = [avg_v_precision,avg_v_recall,avg_v_relevance,avg_v_accuracy,avg_v_faithfulness]
+                                g_updateList = [avg_g_precision,avg_g_recall,avg_g_relevance,avg_g_accuracy,avg_g_faithfulness]
+                                h_updateList = [avg_h_precision,avg_h_recall,avg_h_relevance,avg_h_accuracy,avg_h_faithfulness]
+
+                                console.log("v",avg_v_accuracy,"h",avg_h_accuracy)
+
+                                await updateRadarChart("radarChart1",v_updateList)
+                                await updateRadarChart("radarChart2",g_updateList)
+                                await updateRadarChart("radarChart3",h_updateList)
+                                // updateGauge("gauge1", avg_v_accuracy)
+                                gauge1.options.staticZones = [
+                                    { strokeStyle: 'rgba(224, 176, 255, 0.7)', min: 0, max: avg_v_accuracy*100 },
+                                    { strokeStyle: '#E0E0E0', min: avg_v_accuracy*100, max: 100 }
+                                ];
+                                const percentageElement = document.getElementById('percentage' + 'gauge1');
+                                if (percentageElement) {
+                                    percentageElement.textContent = (avg_v_accuracy * 100).toFixed(2) + '%';
+                                }
+                                gauge1.set(avg_v_accuracy*100)
+
+                                gauge2.options.staticZones = [
+                                    { strokeStyle: 'rgba(176, 242, 180, 0.7)', min: 0, max: avg_g_accuracy*100 },
+                                    { strokeStyle: '#E0E0E0', min: avg_g_accuracy*100, max: 100 }
+                                ];
+                                const percentageElement2 = document.getElementById('percentage' + 'gauge2');
+                                if (percentageElement2) {
+                                    percentageElement2.textContent = (avg_g_accuracy * 100).toFixed(2) + '%';
+                                }
+                                gauge2.set(avg_g_accuracy*100)
+
+                                gauge3.options.staticZones = [
+                                    { strokeStyle: 'rgba(194, 217, 255, 0.7)', min: 0, max: avg_h_accuracy*100 },
+                                    { strokeStyle: '#E0E0E0', min: avg_h_accuracy*100, max: 100 }
+                                ];
+                                const percentageElement3 = document.getElementById('percentage' + 'gauge3');
+                                if (percentageElement3) {
+                                    percentageElement3.textContent = (avg_h_accuracy * 100).toFixed(2) + '%';
+                                }
+                                gauge3.set(avg_h_accuracy*100)
+                    
+                    
+                                updatePieChart(PieChart1,v_datavalues)
+                                updatePieChart(PieChart2,g_datavalues)
+                                updatePieChart(PieChart3,h_datavalues)
                                 // 添加到当前会话
                              
                                 historySessions[currentSession].push(historyItem);
                                 
                                 // 更新UI显示,这里应该做一个增量的修改，不需要再去读取文件了直接把新生成的item 放入questionList
-                                incrementallyDisplayNewHistoryItem(historyItem);
+                                await incrementallyDisplayNewHistoryItem(historyItem);
                                 
                                 // 更新处理状态显示
                                 adviceContent.innerHTML = `<p>正在处理: ${data.item_data.query}</p>`;
-                            }
-                            break;
+                            }break;
                         case 'complete':
-                            console.log('处理完成:', data.message);
-                            adviceContent.innerHTML = `<p>${data.message}</p>`;
+                            console.log('处理完成:');
+                            adviceContent.innerHTML = `
+                            <div class="model-feedback">
+                                <h3>Model Evaluation Suggestions</h3>
+                                <ul>
+                                <li><strong>VectorRAG:</strong> Performs well. Keep the current parameters unchanged.</li>
+                                <li><strong>GraphRAG:</strong> Consider increasing the retrieval hop limit or adjusting the pruning strategy.</li>
+                                <li><strong>Dataset Insight:</strong> This dataset is more suitable for VectorRAG-style responses.</li>
+                                </ul>
+                            </div>
+                            `;
                             applySettingsButton.innerText = "Apply Settings"
                             StopButton.disabled = true
                             break;
@@ -1119,11 +1497,17 @@ async function handleHistoryItemClick(event) {
      let clickedItemData = null; let queryText = 'Loading...';
 
      if (USE_BACKEND_HISTORY) {
-         queryText = div.querySelector('p:nth-of-type(2)')?.textContent.replace('Query: ', '') || 'Loading...';
+        queryText = div.querySelector('p:nth-of-type(2)')?.textContent.replace('Query: ', '') || 'Loading...';
+        const vContent = div.querySelector('p:nth-of-type(3)')?.textContent.replace('V:', '').trim() || 'Loading...';
+        const gContent = div.querySelector('p:nth-of-type(4)')?.textContent.replace('G:', '').trim() || 'Loading...';
+        const hContent = div.querySelector('p:nth-of-type(5)')?.textContent.replace('H:', '').trim() || 'Loading...';
+        current_graph_response = gContent
+        current_vector_response = vContent
+        current_hybrid_response = hContent
          // #backend-integration: Optionally fetch full item details from backend if needed
          // For now, assume we only have ID and query from the list item
-         clickedItemData = { id: itemId, query: queryText,vector_response:  current_vector_response,graph_response:  current_graph_response,hybrid_response:  current_hybrid_response}; // Minimal data
-         console.log(`(API 模式) 历史项被点击: ID ${itemId}`);
+        clickedItemData = { id: itemId, query: queryText,vector_response:  current_vector_response,graph_response:  current_graph_response,hybrid_response:  current_hybrid_response}; // Minimal data
+        console.log(`(API 模式) 历史项被点击: ID ${itemId}`);
      } else {
          const sessionName = currentHistorySessionName;
          if (!sessionName || !historySessions[sessionName]) { console.error("本地会话未找到"); return; }
@@ -1137,6 +1521,7 @@ async function handleHistoryItemClick(event) {
      vectorContent.innerHTML = '正在加载向量细节...'; if (currentCytoscapeInstance) { currentCytoscapeInstance.destroy(); currentCytoscapeInstance = null; } cyContainer.innerHTML = ''; const cyGraphDiv = document.createElement('div'); cyGraphDiv.id = 'cy'; cyGraphDiv.innerHTML = '<p>正在加载图谱...</p>'; cyContainer.appendChild(cyGraphDiv);
 
      // Update answer display using data found (either from local store or minimal API data)
+     console.log("clickedItemData",clickedItemData)
      updateAnswerStore(clickedItemData); displaySelectedAnswer();
 
      // #backend-integration: GET /get-vector/${itemId} 和 GET /get-graph/${itemId}

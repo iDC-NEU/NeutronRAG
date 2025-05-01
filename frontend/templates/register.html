@@ -1,34 +1,30 @@
 <!DOCTYPE html>
-<html lang="en">
-<head>
+<html lang="zh-CN"> <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>注册</title>
-    <link rel="stylesheet" href="/static/css/register.css">
+    <title>注册 - NeutronRAG</title> <link rel="stylesheet" href="{{ url_for('static', filename='css/register.css') }}">
 </head>
 <body>
-    <div class="container"> <!-- 添加 container div -->
-        <h2>注册</h2>
-        <form id="register-form">
-            <label for="username">用户名</label>
-            <input type="text" id="username" name="username" required><br><br>
-
-            <label for="email">邮箱</label>
-            <input type="email" id="email" name="email" required><br><br>
-
-            <label for="phone">手机号</label>
-            <input type="tel" id="phone" name="phone" required><br><br>
-
-            <label for="password">密码</label>
-            <input type="password" id="password" name="password" required><br><br>
-
-            <label for="confirm_password">确认密码</label>
-            <input type="password" id="confirm_password" name="confirm_password" required><br><br>
-
+    <div class="container">
+        <h2>注册 NeutronRAG 账号</h2> <form id="register-form" method="POST">
+             <div class="input-group"> <label for="username">用户名</label>
+                <input type="text" id="username" name="username" required>
+             </div>
+             <div class="input-group"> <label for="email">邮箱</label>
+                <input type="email" id="email" name="email" required>
+             </div>
+             <div class="input-group"> <label for="phone">手机号</label>
+                <input type="tel" id="phone" name="phone" pattern="^1\d{10}$" title="请输入有效的11位中国大陆手机号码" required> </div>
+             <div class="input-group"> <label for="password">密码</label>
+                <input type="password" id="password" name="password" required>
+             </div>
+             <div class="input-group"> <label for="confirm_password">确认密码</label>
+                <input type="password" id="confirm_password" name="confirm_password" required>
+             </div>
             <button type="submit">注册</button>
         </form>
-    </div>
+        <p class="login-link">已有账号？<a href="{{ url_for('login_page') }}">立即登录</a></p> </div>
 
-    <script src="/static/js/register.js"></script>
+    <script src="{{ url_for('static', filename='js/register.js') }}"></script>
 </body>
 </html>

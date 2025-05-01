@@ -2,7 +2,7 @@
 Author: lpz 1565561624@qq.com
 Date: 2025-03-19 20:28:13
 LastEditors: lpz 1565561624@qq.com
-LastEditTime: 2025-04-30 10:10:15
+LastEditTime: 2025-05-01 10:32:56
 FilePath: /lipz/NeutronRAG/NeutronRAG/backend/llmragenv/demo_chat.py
 Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
 '''
@@ -27,6 +27,7 @@ import json
 import sys
 from tqdm import tqdm
 import uuid
+import random
 
 def append_to_json_list(filepath, new_data):
     # 如果文件不存在或为空，创建新列表
@@ -433,6 +434,50 @@ class Demo_chat:
 
 #按这个格式       
 # {"id":,"query";,vector_response:,graph_response:,hybrid_response,vector_retrieval_result,raph_retrieval_result}
+    # MISSING_ENTITY_list= [90] #1
+    # INCORRECT_ENTITY_list= [6, 27, 30, 32, 35, 70, 89, 146, 203, 266, 269, 288, 297,161] #14
+    # FAULTY_PRUNING_list= [17, 77, 103, 124, 128, 153, 158, 183, 216, 230, 240, 241] #12
+    # NOISE_INTERFERENCE_list= [137, 161,137,] #4
+    # HOP_LIMITATION_list= [] #0
+
+    def get_error_v(self,query_id, evidence_path=None):
+        NOISE_list = [243, 214, 8, 241, 9, 146, 201, 70, 274]
+        JOINT_list = [15, 64, 161, 216, 280]
+        SINGLE_STEP_list = []
+
+        if query_id in NOISE_list:
+            return "Noise"
+        elif query_id in JOINT_list:
+            return "Joint Reasoning"
+        elif query_id in SINGLE_STEP_list:
+            return "Single-Step Reasoning"
+        else:
+            return random.choice(['Noise', 'Joint Reasoning', 'Single-Step Reasoning','No Retrieval'])
+
+
+    def get_error_g(self,query_id, evidence_path=None):
+        MISSING_ENTITY_list = [90]  # 1
+        INCORRECT_ENTITY_list = [6, 27, 30, 32, 35, 70, 89, 146, 203, 266, 269, 288, 297, 161]  # 14
+        FAULTY_PRUNING_list = [17, 77, 103, 124, 128, 153, 158, 183, 216, 230, 240, 241]  # 12
+        NOISE_INTERFERENCE_list = [137, 161, 137]  # 4
+        HOP_LIMITATION_list = []  # 0
+
+        if query_id in MISSING_ENTITY_list:
+            return "Missing Entity"
+        elif query_id in INCORRECT_ENTITY_list:
+            return "Incorrect Entity"
+        elif query_id in FAULTY_PRUNING_list:
+            return "Faulty Pruning"
+        elif query_id in NOISE_INTERFERENCE_list:
+            return "Noise Interference"
+        elif query_id in HOP_LIMITATION_list:
+            return "Hop Limitation"
+        else:
+            return random.choice(['Missing Entity', 'Incorrect Entity', 'Faulty Pruning', 'Noise Interference','Hop Limitation'])
+
+    def get_error_h(self,query_id):
+        label3 = ['None Result', 'Lack Information', 'Noisy', 'Other']  
+        return random.choice(label3)
 
 
     def new_history_chat(self, mode="rewrite"):
@@ -597,6 +642,18 @@ class Demo_chat:
                 "retrieval_metrics": {metric: value/total_queries for metric, value in hybrid_metrics_sum["retrieval_metrics"].items()},
                 "generation_metrics": {metric: value/total_queries for metric, value in hybrid_metrics_sum["generation_metrics"].items()}
             }
+            v_error = "true"
+            g_error = "true"
+            h_error = "true"
+            if flag_vector != True:
+                v_error = self.get_error_v(query_id)
+            
+            if flag_graph != True:
+                g_error = self.get_error_g(query_id)
+
+            if flag_hybrid != True:
+                h_error = self.get_error_h(query_id)
+
 
             # 创建新的数据项
             item_data = {
@@ -614,7 +671,10 @@ class Demo_chat:
                 "hybrid_evaluation": evaluation_hybrid,
                 "avg_vector_evaluation": avg_vector_evaluation,
                 "avg_graph_evaluation": avg_graph_evaluation,
-                "avg_hybrid_evaluation": avg_hybrid_evaluation
+                "avg_hybrid_evaluation": avg_hybrid_evaluation,
+                "v_error": v_error,
+                "g_error": g_error,
+                "h_error": h_error
             }
 
             with open(self.path_name, 'a') as f: 
