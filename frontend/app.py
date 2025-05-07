@@ -20,7 +20,7 @@ from watchdog.observers import Observer
 from werkzeug.security import generate_password_hash, check_password_hash
 from zhipuai import ZhipuAI
 
-from config.config import Config
+#from config.config import Config
 from db_setup import db
 from models import User, ChatSession, ChatMessage
 #from user import User
@@ -964,8 +964,9 @@ def create_db_command():
     """根据 models.py 创建数据库表。"""
     if DB_INIT_SUCCESS: # 检查数据库是否成功初始化
         with app.app_context():
-            try: db.create_all();
-            print("数据库表创建成功（或已存在）。")
+            try: 
+                db.create_all()
+                print("数据库表创建成功（或已存在）。")
             except Exception as e: print(f"错误：创建数据库表时出错：{e}"); traceback.print_exc()
     else: print("错误：无法创建表，数据库初始化失败或未配置。")
 
