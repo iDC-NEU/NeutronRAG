@@ -1,4 +1,7 @@
 import json
+import time
+import random
+import threading
 rgb_result_path = "rgb"
 
 rgb_graph_generation = "/home/lipz/NeutronRAG/NeutronRAG/backend/evaluator/rgb/graphrag/analysis_generation___merged.json"
@@ -249,10 +252,44 @@ def statistic_vector_retrieval(dataset):
     print("recall:",recall)
     return precision,relevance,recall
 
+#临时模拟数据统计
+def statistic_hybrid_generation(dataset):
+    hybrid_file_path = "/home/lipz/NeutronRAG/NeutronRAG/backend/evaluator/simulated_data.json"
+    sum_precision = 0.0
+    sum_relevance = 0.0
+    sum_recall = 0.0
+    sum_exact_match = 0.0
+    sum_faithfulness = 0.0
+    count = 0
 
-def statistic_hybrid_generation():
+    
+    with open(hybrid_file_path, 'r', encoding='utf-8') as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
 
-    return
+            data = json.loads(line)
+
+            sum_precision += data['retrieval_metric']['precision']
+            sum_relevance += data['retrieval_metric']['relevance']
+            sum_recall += data['retrieval_metric']['recall']
+            sum_exact_match += data['generation_metric']['exact_match']
+            sum_faithfulness += data['generation_metric']['faithfulness']
+            count += 1
+
+                
+
+    if count == 0:
+        return 0.0, 0.0, 0.0, 0.0, 0.0
+
+    precision = sum_precision / count
+    faithfulness = sum_faithfulness / count
+    accuracy = sum_exact_match / count 
+    relevance = sum_relevance / count
+    recall = sum_recall / count
+
+    return precision, faithfulness, accuracy, relevance, recall
 
 
 
@@ -492,6 +529,62 @@ def adviser():
 
     return v_retrieve_error, v_lose_error, v_lose_correct,g_retrieve_error, g_lose_error, g_lose_correct,"这里是对用户的建议"
 
+# {
+#     "id":
+#     "question":
+#     "retrieval_metric":{
+#         "precision":
+#         "relevance":
+#         "recall":
+#     }
+#     "generation_metric":{
+#         "exact_match":
+#         "faithfulness":
+#     }
+
+# }
+from watchdog.events import FileSystemEventHandler
+from watchdog.observers import Observer
+
+counter = 0
+
+class FileChangeHandler(FileSystemEventHandler):
+    def on_modified(self, event):
+        global counter
+        # 只有文件路径是我们关注的文件时，才更新计数器
+        if event.src_path == file_path:  
+            counter += 1
+            print(f"File modified: {event.src_path}. Current count: {counter}")
+
+def simulate_generate(file_path):
+    for i in range(3):
+        data = {
+            "id": i, 
+            "question": "This is a sample question",  # 模拟问题
+            "retrieval_metric": {
+                "precision": round(random.uniform(0, 1), 6),  # 随机生成 precision
+                "relevance": round(random.uniform(0, 1), 6),  # 随机生成 relevance
+                "recall": round(random.uniform(0, 1), 6)  # 随机生成 recall
+            },
+            "generation_metric": {
+                "exact_match": random.choice([0, 1]),  # 随机选择 exact_match 只能是 0 或 1
+                "faithfulness": round(random.uniform(0, 1), 6)  # 随机生成 faithfulness
+            }
+        }
+
+        # 每次写入都打开和关闭文件，以确保触发修改事件
+        with open(file_path, 'a') as f:  # 使用追加模式
+            json.dump(data, f, separators=(',', ':'))  # 使用 ',' 和 ':' 分隔符
+            f.write('\n')  # 每个元素占一行
+
+        # 输出当前生成的数据
+        print(f"Generated data: {data}")
+        
+        # 等待 2 秒
+        time.sleep(2)
+
+    print("Simulate done in", file_path)
+
 
 if __name__ == '__main__':
     
@@ -502,14 +595,36 @@ if __name__ == '__main__':
     # print("vector")
     # statistic_vector_generation(rgb_vector_generation)
     # statistic_vector_retrieval(rgb_vector_retrieval)
-    print("vector")
-    statistic_error_cause(rgb_vector_generation, rgb_vector_retrieval, "vector")
-    print("graph")
-    statistic_error_cause(rgb_graph_generation, rgb_graph_retrieval, "graph")
-    print("hybrid")
-    statistic_error_cause(rgb_hybrid_generation, rgb_hybrid_retrieval, "hybrid")
+    # print("vector")
+    # statistic_error_cause(rgb_vector_generation, rgb_vector_retrieval, "vector")
+    # print("graph")
+    # statistic_error_cause(rgb_graph_generation, rgb_graph_retrieval, "graph")
+    # print("hybrid")
+    # statistic_error_cause(rgb_hybrid_generation, rgb_hybrid_retrieval, "hybrid")
 
     # question_eval = statistic_question(vector_dataset=rgb_vector_generation,graph_dataset=rgb_graph_generation,hybrid_dataset=rgb_graph_generation)
     # print(adviser())
-    evidence_pruning()
+    # evidence_pruning()
     # construct_hybrid_retrieval()
+    file_path = "simulated_data.json"  # 要监控的文件路径
+
+    # 设置事件处理器
+    event_handler = FileChangeHandler()
+
+    # 创建观察者
+    observer = Observer()
+    observer.schedule(event_handler, path=file_path, recursive=False)  # 监控当前目录
+
+    # 启动观察者
+    observer.start()
+
+    # 创建一个单独的线程来运行模拟数据生成
+    simulation_thread = threading.Thread(target=simulate_generate, args=(file_path,))
+    simulation_thread.start()
+
+    # 让主线程继续监听文件变化，直到模拟数据生成完
+    simulation_thread.join()  # 等待模拟线程结束
+
+    # 停止观察者
+    observer.stop()
+    observer.join()

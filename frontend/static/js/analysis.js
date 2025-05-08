@@ -1,30 +1,30 @@
-document.addEventListener('DOMContentLoaded', function() {
-    fetch('/api/analysis_data') // 请求后端 API 路由
-        .then(response => response.json()) // 将响应转换为 JSON
-        .then(chartData => { // 获取到 JSON 数据后执行以下代码
-            // chartData 现在包含了从后端获取的数据
+// document.addEventListener('DOMContentLoaded', function() {
+//     fetch('/api/analysis_data') // 请求后端 API 路由
+//         .then(response => response.json()) // 将响应转换为 JSON
+//         .then(chartData => { // 获取到 JSON 数据后执行以下代码
+//             // chartData 现在包含了从后端获取的数据
 
-    // 创建仪表盘
-    createGauge('gauge1', chartData.accuracy.graphrag, 'purple');
-    createGauge('gauge2', chartData.accuracy.vectorrag, 'blue');
-    createGauge('gauge3', chartData.accuracy.hybridrag, 'green');
+//     // 创建仪表盘
+//     createGauge('gauge1', chartData.accuracy.graphrag, 'purple');
+//     createGauge('gauge2', chartData.accuracy.vectorrag, 'blue');
+//     createGauge('gauge3', chartData.accuracy.hybridrag, 'green');
 
-    // 创建饼图
-    createPieChart('pieChart1', Object.values(chartData.errorStatistics.vectorrag));
-    createPieChart('pieChart2', Object.values(chartData.errorStatistics.graphrag));
-    createPieChart('pieChart3', Object.values(chartData.errorStatistics.hybridrag));
+//     // 创建饼图
+//     createPieChart('pieChart1', Object.values(chartData.errorStatistics.vectorrag));
+//     createPieChart('pieChart2', Object.values(chartData.errorStatistics.graphrag));
+//     createPieChart('pieChart3', Object.values(chartData.errorStatistics.hybridrag));
 
-    // 创建雷达图
-    createRadarChart('radarChart1', Object.keys(chartData.evaluationMetrics.vectorrag), Object.values(chartData.evaluationMetrics.vectorrag));
-    createRadarChart('radarChart2', Object.keys(chartData.evaluationMetrics.graphrag), Object.values(chartData.evaluationMetrics.graphrag));
-    createRadarChart('radarChart3', Object.keys(chartData.evaluationMetrics.hybridrag), Object.values(chartData.evaluationMetrics.hybridrag));
-})
-.catch(error => {
-    console.error('Error fetching analysis data:', error);
-    //  可以在这里处理错误，例如显示错误信息在页面上
-});
+//     // 创建雷达图
+//     createRadarChart('radarChart1', Object.keys(chartData.evaluationMetrics.vectorrag), Object.values(chartData.evaluationMetrics.vectorrag));
+//     createRadarChart('radarChart2', Object.keys(chartData.evaluationMetrics.graphrag), Object.values(chartData.evaluationMetrics.graphrag));
+//     createRadarChart('radarChart3', Object.keys(chartData.evaluationMetrics.hybridrag), Object.values(chartData.evaluationMetrics.hybridrag));
+// })
+// .catch(error => {
+//     console.error('Error fetching analysis data:', error);
+//     //  可以在这里处理错误，例如显示错误信息在页面上
+// });
 
-    // 创建仪表盘的函数
+//     // 创建仪表盘的函数
     function createGauge(elementId, percentage, color) {
         let colorStart, colorStop;
         switch (color) {
@@ -88,7 +88,7 @@ document.addEventListener('DOMContentLoaded', function() {
         gauge.maxValue = 100;
         gauge.setMinValue(0);
         gauge.animationSpeed = 32;
-        gauge.set(percentage);
+        gauge.value = percentage;
         const percentageElement = document.getElementById('percentage' + elementId);
         if (percentageElement) {
             percentageElement.textContent = percentage + '%';
@@ -96,7 +96,7 @@ document.addEventListener('DOMContentLoaded', function() {
         return gauge;
     }
 
-    // 饼图部分
+//     // 饼图部分
     function createPieChart(canvasId, dataValues) {
         const ctx = document.getElementById(canvasId).getContext('2d');
         return new Chart(ctx, {
@@ -135,53 +135,55 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
 
-    // 雷达图部分
-    function createRadarChart(canvasId, labels, dataValues) {
-        const ctx = document.getElementById(canvasId).getContext('2d');
-        return new Chart(ctx, {
-            type: 'radar',
-            data: {
-                labels: labels,
-                datasets: [{
-                    label: 'Evaluation Metric',
-                    data: dataValues,
-                    backgroundColor: 'rgba(34, 202, 236, 0.05)', /* 更浅的背景透明度 */
-                    borderColor: 'rgba(34, 202, 236, 0.8)', /* 略微加深雷达图线条颜色 */
-                    borderWidth: 1.2 /* 进一步减细雷达图线条 */
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                    r: {
-                        beginAtZero: true,
-                        max: 1,
-                        ticks: {
-                            stepSize: 0.2
-                        },
-                        grid: {
-                            color: 'rgba(0, 0, 0, 0.08)' /* 更淡的网格线 */
-                        },
-                        angleLines: {
-                            color: 'rgba(0, 0, 0, 0.08)' /* 更淡的角度线 */
-                        }
-                    }
-                },
-                 plugins: {
-                    legend: {
-                        display: false
-                    }
-                },
-                elements: {
-                    line: {
-                        tension: 0.1
-                    },
-                    point: {
-                        radius: 1.8 /* 雷达图顶点更小 */
-                    }
-                }
-            }
-        });
-    }
-});
+//     // 雷达图部分
+//     function createRadarChart(canvasId, labels, dataValues) {
+//         const ctx = document.getElementById(canvasId).getContext('2d');
+//         return new Chart(ctx, {
+//             type: 'radar',
+//             data: {
+//                 labels: labels,
+//                 datasets: [{
+//                     label: 'Evaluation Metric',
+//                     data: dataValues,
+//                     backgroundColor: 'rgba(34, 202, 236, 0.05)', /* 更浅的背景透明度 */
+//                     borderColor: 'rgba(34, 202, 236, 0.8)', /* 略微加深雷达图线条颜色 */
+//                     borderWidth: 1.2 /* 进一步减细雷达图线条 */
+//                 }]
+//             },
+//             options: {
+//                 responsive: true,
+//                 maintainAspectRatio: false,
+//                 scales: {
+//                     r: {
+//                         beginAtZero: true,
+//                         max: 1,
+//                         ticks: {
+//                             stepSize: 0.2
+//                         },
+//                         grid: {
+//                             color: 'rgba(0, 0, 0, 0.08)' /* 更淡的网格线 */
+//                         },
+//                         angleLines: {
+//                             color: 'rgba(0, 0, 0, 0.08)' /* 更淡的角度线 */
+//                         }
+//                     }
+//                 },
+//                  plugins: {
+//                     legend: {
+//                         display: false
+//                     }
+//                 },
+//                 elements: {
+//                     line: {
+//                         tension: 0.1
+//                     },
+//                     point: {
+//                         radius: 1.8 /* 雷达图顶点更小 */
+//                     }
+//                 }
+//             }
+//         });
+//     }
+// });
+
+

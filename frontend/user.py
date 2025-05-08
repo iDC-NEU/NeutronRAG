@@ -1,6 +1,14 @@
+'''
+Author: lpz 1565561624@qq.com
+Date: 2025-02-09 18:31:22
+LastEditors: lpz 1565561624@qq.com
+LastEditTime: 2025-04-29 12:45:10
+FilePath: /NeutronRAG/NeutronRAG/frontend/user.py
+Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
+'''
 import re
 import mysql.connector
-from config.config import db_config 
+from config.config import db_chat_config 
 from datetime import datetime
 
 class User:
@@ -10,7 +18,7 @@ class User:
         self.phone = phone
         self.password = password
         self.user_id = None  # 初始化 user_id
-        self.conn = mysql.connector.connect(**db_config)  # 使用导入的配置创建连接  
+        self.conn = mysql.connector.connect(**db_chat_config)  # 使用导入的配置创建连接  
         self.cursor = self.conn.cursor() 
 
     def _is_valid_email(self) -> bool:

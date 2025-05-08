@@ -22,6 +22,13 @@ transformers~=4.38.1
 pypdf~=4.0.2
 python-pptx~=0.6.23
 flask~=3.0.0
+
+Flask-SQLAlchemy
+SQLAlchemy
+werkzeug
+python-dotenv
+mysql-connector-python
+
 nebula3-python==3.5.0
 llama-index==0.10.10
 scikit-learn==1.5.0

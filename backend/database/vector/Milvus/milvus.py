@@ -141,11 +141,12 @@ class MilvusDB(VectorDatabase):
 
         self.index = None
         self.retriever = None
+        self.topk = similarity_top_k
 
         self.embed_model = HuggingFaceEmbedding(
                 model_name="BAAI/bge-large-en-v1.5",
                 embed_batch_size=20,
-                device="cuda:0")
+                device="cuda:2")
 
 
         connections.connect("default", host="localhost", port=server_port)
@@ -303,7 +304,7 @@ def test_retrieve_nodes(db_name):
     vector_db.show_collections_stats()
     collection = Collection("rgb")
     collection.load()
-    print(collection.is_loaded)
+    # print(collection.is_loaded)
 
     question = "Tell me about Lebron James?"
 
@@ -316,13 +317,16 @@ def test_retrieve_nodes(db_name):
 
     nodes = vector_db.retrieve_nodes(question, embedding)
 
-    print(f'nodes:\n{nodes}')
-    for node in nodes:
-        print_text(f'{node.text}\n', color='yellow')
+    # print(f'nodes:\n{nodes}')
+    # for node in nodes:
+    #     print_text(f'{node.text}\n', color='yellow')
     
 
 
 if __name__ == "__main__":
+    
+    # import time
+    # start = time.perf_counter()
     # vector_db = MilvusDB(
     #         collection_name="rgb",
     #         dim=1024,
@@ -335,6 +339,8 @@ if __name__ == "__main__":
 
     # # 调用 get_topk_chunk 方法进行检索
     # topk_results = vector_db.get_topk_vector(query_vector)
+    # end = time.perf_counter()
+    # print(f"执行时间: {end - start:.4f} 秒")
 
     # # 打印结果
     # print("Top 5 similar vectors:")
@@ -342,7 +348,38 @@ if __name__ == "__main__":
     #     print(f"ID: {result['id']}, Distance: {result['distance']}")
     #     print(result)
 
+    # import time
 
-    db_name = "rgb"
-    test_retrieve_nodes(db_name)
+    # db_name = "rgb"
 
+    # start = time.perf_counter()
+    # test_retrieve_nodes(db_name)
+    # end = time.perf_counter()
+
+    # print(f"执行时间: {end - start:.4f} 秒")
+    import torch
+    from transformers import AutoTokenizer, AutoModelForCausalLM
+    import time
+
+    model_path = "/home/hdd/model/Llama-2-13b-chat-hf"
+    tokenizer = AutoTokenizer.from_pretrained(model_path)
+    model = AutoModelForCausalLM.from_pretrained(
+    model_path
+    ).to("cuda")
+
+    input_text = "介绍一下人工智能的历史和发展。"  # 示例输入
+
+    # Tokenize 输入
+    input_ids = tokenizer.encode(input_text, return_tensors="pt").to("cuda")
+    start_time = time.time()
+
+    # 生成 2500 token（max_new_tokens=2500）
+    output = model.generate(
+        input_ids,
+        max_new_tokens=2500,  # 控制生成 token 数量
+        do_sample=True,       # 启用随机采样
+        temperature=0.7,      # 控制随机性
+        top_p=0.9,            # Nucleus sampling
+    )
+
+    end_time = time.time()
