@@ -450,17 +450,25 @@ function displaySelectedAnswer() {
 async function fetchAndDisplaySuggestions() {
     adviceContent.innerHTML = "正在加载建议...";
     try {
-        // #backend-integration: 从后端 /get_suggestions 接口获取建议
-        const response = await fetch('/get_suggestions');
+        const response = await fetch('/get_suggestions', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                current_dataset: selectedDatasetName,       // ← 你自己的数据集名
+                current_session: currentSession     // ← 会话标识
+            })
+        });
+
         if (!response.ok) {
             const errorText = await response.text();
             throw new Error(`网络错误: ${response.status} ${errorText}`);
         }
+
         const data = await response.json();
-        console.log("建议数据:", data);
-        if (data.suggestionsHTML) {
-            adviceContent.innerHTML = data.suggestionsHTML;
-        } else if (data.advice) {
+
+        if (data.advice) {
             adviceContent.innerHTML = `
                 <h3>向量 RAG 错误:</h3>
                 <ul>
@@ -478,15 +486,13 @@ async function fetchAndDisplaySuggestions() {
                 <p>${data.advice}</p>
             `;
         } else {
-            adviceContent.textContent = "收到的建议数据格式不正确。";
-            console.warn("未预期的建议数据格式", data);
+            adviceContent.textContent = "建议数据格式不正确";
         }
     } catch (error) {
         console.error('获取建议时出错:', error);
         adviceContent.textContent = `无法加载建议: ${error.message}`;
     }
 }
-
 function populateSelect(selectElement, options) {
     const currentVal = selectElement.value;
     const defaultOptionText = `-- 请选择 ${selectElement.id.split('-')[1] || '选项'} --`;
@@ -1253,6 +1259,7 @@ applySettingsButton.addEventListener("click", async () => {
                                 </ul>
                             </div>
                             `;
+                            await fetchAndDisplaySuggestions();
                             applySettingsButton.innerText = "Apply Settings"
                             StopButton.disabled = true
                             break;
@@ -1472,7 +1479,7 @@ StopButton.addEventListener("click", async () => {
         console.log("设置应用成功:", result);
         
         // 可以在这里调用 fetchAndDisplaySuggestions() 如果需要
-        // await fetchAndDisplaySuggestions();
+        await fetchAndDisplaySuggestions();
         
     } catch (error) { 
         console.error("应用设置时发生错误:", error); 
@@ -1487,7 +1494,14 @@ StopButton.addEventListener("click", async () => {
 });
 
 
-
+document.addEventListener('DOMContentLoaded', function () {
+    const button = document.getElementById('show-suggestion');
+    if (button) {
+        button.addEventListener('click', async function () {
+            await fetchAndDisplaySuggestions();
+        });
+    }
+});
 
 
 // --- 检索结果显示逻辑 ---

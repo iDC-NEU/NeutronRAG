@@ -479,35 +479,79 @@ def get_vector(item_id):
     else:
         return jsonify({'error': f'Item not found or invalid ID format for vector lookup: {item_id}'}), 404
 
-
-@app.route('/get_suggestions', methods=['GET'])
+@app.route('/get_suggestions', methods=['POST'])
 def adviser():
-    # 假设下面这些文件路径是正确的
-    rgb_graph_generation = "/home/lipz/NeutronRAG/NeutronRAG/backend/evaluator/rgb/graphrag/analysis_generation___merged.json"
-    rgb_graph_retrieval = "/home/lipz/NeutronRAG/NeutronRAG/backend/evaluator/rgb/graphrag/analysis_retrieval_merged.json"
-    rgb_vector_generation = "/home/lipz/NeutronRAG/NeutronRAG/backend/evaluator/rgb/vectorrag/analysis_generation___top5_2024-11-26_21-32-23.json"
-    rgb_vector_retrieval = "/home/lipz/NeutronRAG/NeutronRAG/backend/evaluator/rgb/vectorrag/analysis_retrieval___top5_2024-11-26_21-32-23.json"
+    try:
+        # 获取 JSON 数据
+        data = request.get_json()
+        current_dataset = data.get("current_dataset")
+        current_session = data.get("current_session")
+        print(f"current_dataset:{current_dataset},current_session:{current_session}")
 
-    try: # 添加 try-except 块
-        # 假设 statistic_error_cause 函数已经定义且可用
-        v_retrieve_error, v_lose_error, v_lose_correct = simulate.statistic_error_cause(rgb_vector_generation, rgb_vector_retrieval, "vector")
-        g_retrieve_error, g_lose_error, g_lose_correct = simulate.statistic_error_cause(rgb_graph_generation, rgb_graph_retrieval, "graph")
+        if not current_dataset or not current_session:
+            return jsonify({"error": "缺少 current_dataset 或 current_session 参数"}), 400
+
+        # 构造文件路径（根据你的实际文件组织结构调整）
+        file_path = f"../backend/llmragenv/chat_history/{current_dataset}/{current_session}.json"
+
+        if not os.path.exists(file_path):
+            return jsonify({"error": f"文件未找到: {file_path}"}), 404
+
+        # 读取并解析文件内容（假设为 JSON 格式）
+        content = read_json_lines(file_path)
+        # 示例处理逻辑：根据内容生成建议（你可以自定义）
+        # suggestions = {
+        #     "advice": content.get("advice", "暂无建议"),
+        #     "vector_retrieve_error": content.get("vector_retrieve_error", 0),
+        #     "vector_lose_error": content.get("vector_lose_error", 0),
+        #     "vector_lose_correct": content.get("vector_lose_correct", 0),
+        #     "graph_retrieve_error": content.get("graph_retrieve_error", 0),
+        #     "graph_lose_error": content.get("graph_lose_error", 0),
+        #     "graph_lose_correct": content.get("graph_lose_correct", 0),
+        # }
+
+        def generate_advice():
+            return "simulate suggestion"
+
         suggestions = {
-            "vector_retrieve_error": v_retrieve_error, "vector_lose_error": v_lose_error, "vector_lose_correct": v_lose_correct,
-            "graph_retrieve_error": g_retrieve_error, "graph_lose_error": g_lose_error, "graph_lose_correct": g_lose_correct,
-            "advice": "这里是对用户的建议" # 原始建议文本
+            "content": len(content),
+            "advice": generate_advice()
         }
-        # print(suggestions) # 原始调试信息
+
         return jsonify(suggestions)
-    except AttributeError:
-         error_msg = "Error: 'simulate' module or 'statistic_error_cause' function not found or loaded correctly."
-         print(error_msg)
-         return jsonify({"error": error_msg}), 500
+
     except Exception as e:
-        error_msg = f"An error occurred while generating suggestions: {e}"
-        print(error_msg)
-        traceback.print_exc()
-        return jsonify({"error": error_msg}), 500
+        return jsonify({"error": f"处理建议时出错: {str(e)}"}), 500
+
+
+# @app.route('/get_suggestions', methods=['GET'])
+# def adviser():
+#     # 假设下面这些文件路径是正确的
+#     rgb_graph_generation = "/home/lipz/NeutronRAG/NeutronRAG/backend/evaluator/rgb/graphrag/analysis_generation___merged.json"
+#     rgb_graph_retrieval = "/home/lipz/NeutronRAG/NeutronRAG/backend/evaluator/rgb/graphrag/analysis_retrieval_merged.json"
+#     rgb_vector_generation = "/home/lipz/NeutronRAG/NeutronRAG/backend/evaluator/rgb/vectorrag/analysis_generation___top5_2024-11-26_21-32-23.json"
+#     rgb_vector_retrieval = "/home/lipz/NeutronRAG/NeutronRAG/backend/evaluator/rgb/vectorrag/analysis_retrieval___top5_2024-11-26_21-32-23.json"
+
+#     try: # 添加 try-except 块
+#         # 假设 statistic_error_cause 函数已经定义且可用
+#         v_retrieve_error, v_lose_error, v_lose_correct = simulate.statistic_error_cause(rgb_vector_generation, rgb_vector_retrieval, "vector")
+#         g_retrieve_error, g_lose_error, g_lose_correct = simulate.statistic_error_cause(rgb_graph_generation, rgb_graph_retrieval, "graph")
+#         suggestions = {
+#             "vector_retrieve_error": v_retrieve_error, "vector_lose_error": v_lose_error, "vector_lose_correct": v_lose_correct,
+#             "graph_retrieve_error": g_retrieve_error, "graph_lose_error": g_lose_error, "graph_lose_correct": g_lose_correct,
+#             "advice": "based on current query answer history" 
+#         }
+#         # print(suggestions) # 原始调试信息
+#         return jsonify(suggestions)
+#     except AttributeError:
+#          error_msg = "Error: 'simulate' module or 'statistic_error_cause' function not found or loaded correctly."
+#          print(error_msg)
+#          return jsonify({"error": error_msg}), 500
+#     except Exception as e:
+#         error_msg = f"An error occurred while generating suggestions: {e}"
+#         print(error_msg)
+#         traceback.print_exc()
+#         return jsonify({"error": error_msg}), 500
 
 
 @app.route('/get_accuracy', methods=['GET'])
