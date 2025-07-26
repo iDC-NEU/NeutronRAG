@@ -11,7 +11,7 @@ from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 from flask_cors import CORS
 from zhipuai import ZhipuAI
-from user import User
+# from user import User
 current_dir = os.getcwd()
 
 # 获取当前工作目录的上级目录
@@ -84,9 +84,9 @@ def analysis():
 
 # --- 原始文件路径和函数 ---
 
-VECTOR_FILE_PATH = '/home/lipz/NeutronRAG/NeutronRAG/backend/evaluator/rgb/vectorrag/analysis_retrieval___top5_2024-11-26_21-32-23.json'
-GRAPH_FILE_PATH = '/home/lipz/NeutronRAG/NeutronRAG/backend/evaluator/rgb/graphrag/analysis_retrieval_merged.json'
-EVIDENCE_FILE_PATH = "/home/lipz/NeutronRAG/NeutronRAG/backend/evaluator/rgb_evidence.json"
+VECTOR_FILE_PATH = '../backend/evaluator/rgb/vectorrag/analysis_retrieval___top5_2024-11-26_21-32-23.json'
+GRAPH_FILE_PATH = '../backend/evaluator/rgb/graphrag/analysis_retrieval_merged.json'
+EVIDENCE_FILE_PATH = "../backend/evaluator/rgb_evidence.json"
 
 
 ##加载响应的id数据
@@ -479,6 +479,91 @@ def get_vector(item_id):
     else:
         return jsonify({'error': f'Item not found or invalid ID format for vector lookup: {item_id}'}), 404
 
+def statistic_error(qa_path):
+    # 读取 JSON 数据
+    content = read_json_lines(qa_path)
+
+    # 初始化各类错误计数
+    error_count = {
+        "v_error": {
+            "Noise": 0,
+            "JointReasoning": 0,
+            "SingleStepReasoning": 0,
+            "NoRetrieval": 0,
+            "OtherErrors": 0
+        },
+        "g_error": {
+            "MissingEntity": 0,
+            "IncorrectEntity": 0,
+            "FaultyPruning": 0,
+            "NoiseInterference": 0,
+            "HopLimitation":0,
+            "OtherErrors": 0
+        },
+        "h_error": {
+            "NoneResult": 0,
+            "LackInformation": 0,
+            "Noisy": 0,
+            "OtherErrors": 0
+        }
+    }
+
+    # 遍历内容并统计每种错误类型
+    for item in content:
+        # 统计 v_error 类型
+        if item["v_error"] != "true":
+            if item["v_error"] == "Noise":
+                error_count["v_error"]["Noise"] += 1
+            elif item["v_error"] == "Joint Reasoning":
+                error_count["v_error"]["JointReasoning"] += 1
+            elif item["v_error"] == "Single Step Reasoning":
+                error_count["v_error"]["SingleStepReasoning"] += 1
+            elif item["v_error"] == "No Retrieval":
+                error_count["v_error"]["NoRetrieval"] += 1
+            else:
+                error_count["v_error"]["OtherErrors"] += 1
+        
+        # 统计 g_error 类型
+        if item["g_error"] != "true":
+            if item["g_error"] == "Missing Entity":
+                error_count["g_error"]["MissingEntity"] += 1
+            elif item["g_error"] == "Incorrect Entity":
+                error_count["g_error"]["IncorrectEntity"] += 1
+            elif item["g_error"] == "Faulty Pruning":
+                error_count["g_error"]["FaultyPruning"] += 1
+            elif item["g_error"] == "Noise Interference":
+                error_count["g_error"]["NoiseInterference"] += 1
+            elif item["g_error"] == "Hop Limitation":
+                error_count["g_error"]["HopLimitation"] += 1
+            else:
+                error_count["g_error"]["OtherErrors"] += 1
+
+        # 统计 h_error 类型
+        if item["h_error"] != "true":
+            if item["h_error"] == "None Result":
+                error_count["h_error"]["NoneResult"] += 1
+            elif item["h_error"] == "Lack Information":
+                error_count["h_error"]["LackInformation"] += 1
+            elif item["h_error"] == "Noisy":
+                error_count["h_error"]["Noisy"] += 1
+            else:
+                error_count["h_error"]["OtherErrors"] += 1
+
+    # 输出统计结果
+    print("Error Statistics:")
+    for error_type in ["v_error", "g_error", "h_error"]:
+        print(f"\n{error_type} Statistics:")
+        for error_subtype, count in error_count[error_type].items():
+            print(f"{error_subtype}: {count}")
+
+    return error_count
+            
+
+
+
+
+
+
 @app.route('/get_suggestions', methods=['POST'])
 def adviser():
     try:
@@ -499,23 +584,112 @@ def adviser():
 
         # 读取并解析文件内容（假设为 JSON 格式）
         content = read_json_lines(file_path)
-        # 示例处理逻辑：根据内容生成建议（你可以自定义）
-        # suggestions = {
-        #     "advice": content.get("advice", "暂无建议"),
-        #     "vector_retrieve_error": content.get("vector_retrieve_error", 0),
-        #     "vector_lose_error": content.get("vector_lose_error", 0),
-        #     "vector_lose_correct": content.get("vector_lose_correct", 0),
-        #     "graph_retrieve_error": content.get("graph_retrieve_error", 0),
-        #     "graph_lose_error": content.get("graph_lose_error", 0),
-        #     "graph_lose_correct": content.get("graph_lose_correct", 0),
-        # }
+        query_num = len(content)
+        print(len(content))
+        error_count = statistic_error(file_path)
+        print(error_count)
+        v_noise = error_count["v_error"]["Noise"]
+        v_joint = error_count["v_error"]["JointReasoning"]
+        v_single = error_count["v_error"]["SingleStepReasoning"]
+        v_no = error_count["v_error"]["NoRetrieval"]
+        v_other = error_count["v_error"]["OtherErrors"]
+        v_total = v_noise + v_joint + v_single + v_no + v_other
+
+
+        g_missing = error_count["g_error"]["MissingEntity"]
+        g_incorrect = error_count["g_error"]["IncorrectEntity"]
+        g_pruning = error_count["g_error"]["FaultyPruning"]
+        g_noise = error_count["g_error"]["NoiseInterference"]
+        g_hop = error_count["g_error"]["HopLimitation"]
+        g_other = error_count["g_error"]["OtherErrors"]
+        g_total = g_missing + g_incorrect + g_pruning + g_noise + g_hop + g_other
+
+        # h_error 部分
+        h_none = error_count["h_error"]["NoneResult"]
+        h_lack = error_count["h_error"]["LackInformation"]
+        h_noisy = error_count["h_error"]["Noisy"]
+        h_other = error_count["h_error"]["OtherErrors"]
+        h_total = h_none + h_lack + h_noisy + h_other
+
+
+
 
         def generate_advice():
             return "simulate suggestion"
+        def generate_v_advice():
+            if query_num == 0:
+                return "No queries to evaluate."
 
+            v_ratio = v_total / query_num
+
+            if v_ratio > 0.85:
+                return "Vector retrieval performs well overall."
+
+            # 构造错误字典
+            v_errors = {
+                "Noise": v_noise,
+                "JointReasoning": v_joint,
+                "SingleStepReasoning": v_single,
+                "NoRetrieval": v_no,
+                "OtherErrors": v_other
+            }
+
+            # 找出出现次数最多的错误类型
+            max_type = max(v_errors, key=v_errors.get)
+
+            if max_type == "Noise":
+                return "Try using a higher similarity threshold or refine chunking granularity."
+            elif max_type == "JointReasoning":
+                return "Consider using multi-hop retrieval or combining multiple evidences."
+            elif max_type == "SingleStepReasoning":
+                return "try to use iterative retrieval."
+            elif max_type == "NoRetrieval":
+                return "Try using a lower similarity threshold."
+            else:
+                return "Review vector retrieval for unclassified errors."
+
+
+        def generate_g_advice():
+            if query_num == 0:
+                return "No queries to evaluate."
+
+            g_ratio = g_total / query_num
+
+            if g_ratio > 0.85:
+                return "Graph retrieval performs well overall."
+
+            # 构造错误字典
+            g_errors = {
+                "MissingEntity": g_missing,
+                "IncorrectEntity": g_incorrect,
+                "FaultyPruning": g_pruning,
+                "NoiseInterference": g_noise,
+                "HopLimitation": g_hop,
+                "OtherErrors": g_other
+            }
+
+            # 找出出现次数最多的错误类型
+            max_type = max(g_errors, key=g_errors.get)
+
+            if max_type == "MissingEntity":
+                return "Consider improving entity extraction or recall coverage or useing higher 'max keywords'"
+            elif max_type == "IncorrectEntity":
+                return "Some questions may not have clear entities, so these questions are suitable for hybrid retrieval."
+            elif max_type == "FaultyPruning":
+                return "Pruning strategy may be too aggressive — consider relaxing constraints."
+            elif max_type == "NoiseInterference":
+                return "Enhance subgraph ranking or introduce denoising strategies or using another Pruning method"
+            elif max_type == "HopLimitation":
+                return "Try increasing the Retrieval hop."
+            else:
+                return "Review graph retrieval pipeline for unclassified errors."
+
+        print(generate_v_advice())
         suggestions = {
-            "content": len(content),
-            "advice": generate_advice()
+            "error_count": error_count,
+            "v_advice":generate_v_advice(),
+            "g_advice":generate_g_advice(),
+            "advice":"test connect"
         }
 
         return jsonify(suggestions)
@@ -879,6 +1053,8 @@ def logout():
 #         print(f"加载模型时出错: {e}")
 #         traceback.print_exc() # 打印完整错误堆栈
 #         return jsonify({"status": "error", "message": str(e)}), 500
+
+
 
 
 @app.route('/load_model', methods=['POST'])

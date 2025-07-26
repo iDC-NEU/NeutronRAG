@@ -43,6 +43,8 @@
                             <option value="llama3:8b">llama3:8b</option>
                             <option value="llama2:13b">llama2:13b</option>
                             <option value="deepseek-reasoner">DeepSeek-R1</option>
+                            <option value="qwen-turbo-latest">qwen-turbo-latest</option>
+                            <option value="qwen-plus">qwen-plus</option>
                             </select>
                     </div>
                     <div class="input-group">
@@ -197,7 +199,7 @@
                             <div class="content advice-content-wrapper" id="advice-content">
                                 <img src="{{ url_for('static', filename='lib/suggestion.png') }}" alt="Suggestion Type Icon" class="advice-type-icon">
                                 <div id="advice-text">
-                                    应用设置后或可查看建议。
+                                    Generate or select a response to the Q&A history, click the button to generate suggestions
                                 </div>
                             </div>
                         </div>

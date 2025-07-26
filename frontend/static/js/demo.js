@@ -470,20 +470,35 @@ async function fetchAndDisplaySuggestions() {
 
         if (data.advice) {
             adviceContent.innerHTML = `
-                <h3>向量 RAG 错误:</h3>
+                <h3>VectorRAG Error:</h3>
                 <ul>
-                    <li>检索错误: ${data.vector_retrieve_error ?? 'N/A'}</li>
-                    <li>丢失错误: ${data.vector_lose_error ?? 'N/A'}</li>
-                    <li>丢失正确: ${data.vector_lose_correct ?? 'N/A'}</li>
+                    <li>Noise: ${data.error_count.v_error.Noise ?? 'N/A'}</li>
+                    <li>Joint Reasoning: ${data.error_count.v_error.JointReasoning ?? 'N/A'}</li>
+                    <li>Single Step Reasoning: ${data.error_count.v_error.SingleStepReasoning ?? 'N/A'}</li>
+                    <li>No Retrieval: ${data.error_count.v_error.NoRetrieval ?? 'N/A'}</li>
+                    <li>Other Errors: ${data.error_count.v_error.OtherErrors ?? 'N/A'}</li>
                 </ul>
-                <h3>图谱 RAG 错误:</h3>
+                <h3>GraphRAG Error:</h3>
                 <ul>
-                    <li>检索错误: ${data.graph_retrieve_error ?? 'N/A'}</li>
-                    <li>丢失错误: ${data.graph_lose_error ?? 'N/A'}</li>
-                    <li>丢失正确: ${data.graph_lose_correct ?? 'N/A'}</li>
+                    <li>Missing Entity: ${data.error_count.g_error.MissingEntity ?? 'N/A'}</li>
+                    <li>Incorrect Entity: ${data.error_count.g_error.IncorrectEntity ?? 'N/A'}</li>
+                    <li>Faulty Pruning: ${data.error_count.g_error.FaultyPruning ?? 'N/A'}</li>
+                    <li>Noise Interference: ${data.error_count.g_error.NoiseInterference ?? 'N/A'}</li>
+                    <li>Hop Limitation: ${data.error_count.g_error.HopLimitation ?? 'N/A'}</li>
+                    <li>Other Errors: ${data.error_count.g_error.OtherErrors ?? 'N/A'}</li>
                 </ul>
-                <h3>建议:</h3>
-                <p>${data.advice}</p>
+                <h3>HybridRAG Error:</h3>
+                <ul>
+                    <li>None-Result: ${data.error_count.h_error.NoneResult ?? 'N/A'}</li>
+                    <li>Lack Information: ${data.error_count.h_error.LackInformation ?? 'N/A'}</li>
+                    <li>Noisy: ${data.error_count.h_error.Noisy ?? 'N/A'}</li>
+                    <li>Other-Errors: ${data.error_count.h_error.OtherErrors ?? 'N/A'}</li>
+                </ul>
+                <h3>Vector Suggestions:</h3>
+                <p>${data.v_advice ?? 'N/A'}</p>
+                <h3>Graph Suggestions:</h3>
+                <p>${data.g_advice ?? 'N/A'}</p>
+
             `;
         } else {
             adviceContent.textContent = "建议数据格式不正确";

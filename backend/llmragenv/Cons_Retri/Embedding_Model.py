@@ -23,7 +23,7 @@ class EmbeddingEnv:
     def __init__(self,
                  embed_name="BAAI/bge-large-en-v1.5",
                  embed_batch_size=20,
-                 device="cuda:2"):
+                 device="cuda:0"):
         self.embed_name = embed_name
         self.embed_batch_size = embed_batch_size
 

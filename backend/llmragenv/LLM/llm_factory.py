@@ -26,7 +26,7 @@ from config.config import Config
 LLMProvider = {
     "zhipu" : [],
     "baichuan" : [],
-    "qwen" : [],
+    "qwen" : ["qwen-plus","qwen-turbo-latest"],
     "moonshot" : [],
     "lingyiwanwu" : [],
     "deepseek" : ["deepseek-reasoner"],
