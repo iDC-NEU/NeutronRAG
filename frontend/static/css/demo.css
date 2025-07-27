@@ -427,6 +427,7 @@ body {
 .suggestion-section {
     grid-area: suggestion-section;
     min-height: 250px;
+    max-height: 500px;
     display: flex;
     flex-direction: column;
 }

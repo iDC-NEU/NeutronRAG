@@ -25,7 +25,17 @@
             <div class="user-area">
                  <i class="material-icons user-icon">account_circle</i>
                  <span id="user-info-display" style="margin-left: 5px; display: none; color: #eee; font-weight: bold;"></span>
-                 <button id="logout-button" class="logout-button" style="margin-left: 15px; display: none; padding: 5px 10px; cursor: pointer;">登出</button>
+                 {% if session['username'] %}
+                 <span id="welcome-text" style="white-space: nowrap; color: #0a0404; margin-left: 10px;">
+                     欢迎 {{ session['username'] }}
+                 </span>
+                 <button id="logout-button" class="logout-button" style="margin-left: 15px; padding: 5px 10px; cursor: pointer;">
+                     logout
+                 </button>
+                {% else %}
+                 <a href="{{ url_for('login') }}" style="color: #0a0404; margin-left: 10px;">登录</a>
+                 <a href="{{ url_for('register') }}" style="color: #0a0404; margin-left: 10px;">注册</a>
+                {% endif %}
             </div>
         </header>
 
@@ -43,6 +53,8 @@
                             <option value="llama3:8b">llama3:8b</option>
                             <option value="llama2:13b">llama2:13b</option>
                             <option value="deepseek-reasoner">DeepSeek-R1</option>
+                            <option value="qwen-turbo-latest">qwen-turbo-latest</option>
+                            <option value="qwen-plus">qwen-plus</option>
                             </select>
                     </div>
                     <div class="input-group">
@@ -187,6 +199,7 @@
                  <div class="advice-box">
                     <div class="section-title suggestion-title">
                         <span>Suggestions</span>
+                        <button id="show-suggestion">Show suggestions</button>
                         <div class="title-icons">
                             <img src="{{ url_for('static', filename='lib/lantern.png') }}" alt="Suggestion Icon" class="suggestion-icon">
                         </div>
@@ -196,7 +209,7 @@
                             <div class="content advice-content-wrapper" id="advice-content">
                                 <img src="{{ url_for('static', filename='lib/suggestion.png') }}" alt="Suggestion Type Icon" class="advice-type-icon">
                                 <div id="advice-text">
-                                    应用设置后或可查看建议。
+                                    Generate or select a response to the Q&A history, click the button to generate suggestions
                                 </div>
                             </div>
                         </div>

@@ -367,7 +367,9 @@ def get_evidence(file_path,item_id):
 # --- 基本页面路由 ---
 @app.route('/')
 @login_required
-def index(): return render_template('demo.html')
+def index(): 
+    username = session.get('username')
+    return render_template('demo.html')
 @app.route('/login', methods=['GET'])
 def login_page():
      if 'user_id' in session: return redirect(url_for('index'))
@@ -413,6 +415,7 @@ def api_login():
         user = User.query.filter_by(username=username).first()
         if user and user.check_password(password):
             session.clear(); session['user_id'] = user.id; session['username'] = user.username
+            
             return jsonify({"message": "登录成功！"}), 200
         else: return jsonify({"error": "无效的用户名或密码"}), 401
     except Exception as e: return jsonify({"error": "登录过程中发生内部错误。"}), 500
@@ -977,4 +980,5 @@ if __name__ == '__main__':
     # (省略启动信息打印 - 同前)
     if not RAG_CORE_LOADED: print(" * 警告：RAG 核心未加载。")
     if not DB_INIT_SUCCESS: print(" * 错误：数据库未正确配置或初始化失败，功能受限。")
-    app.run(host='0.0.0.0', port=ui_port, debug=True, threaded=True)
+    print("#################################")
+    app.run(host='0.0.0.0', port=ui_port, debug=False, threaded=True)

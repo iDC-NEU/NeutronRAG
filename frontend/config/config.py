@@ -1,12 +1,11 @@
 '''
-Author: fzb fzb0316@163.com
-Date: 2024-09-15 17:15:53
+Author: lpz 1565561624@qq.com
+Date: 2025-02-09 18:31:22
 LastEditors: lpz 1565561624@qq.com
-LastEditTime: 2025-04-29 13:17:28
-FilePath: /RAGWebUi_demo/config/config.py
+LastEditTime: 2025-05-07 20:02:08
+FilePath: /lipz/NeutronRAG/NeutronRAG/frontend/config/config.py
 Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
 '''
-
 
 import threading
 from functools import lru_cache

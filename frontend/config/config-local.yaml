@@ -1,5 +1,5 @@
 server:
-  ui_port: 8083
+  ui_port: 8084
   ui_share: false
 
 

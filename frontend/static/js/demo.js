@@ -450,43 +450,64 @@ function displaySelectedAnswer() {
 async function fetchAndDisplaySuggestions() {
     adviceContent.innerHTML = "正在加载建议...";
     try {
-        // #backend-integration: 从后端 /get_suggestions 接口获取建议
-        const response = await fetch('/get_suggestions');
+        const response = await fetch('/get_suggestions', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                current_dataset: selectedDatasetName,       // ← 你自己的数据集名
+                current_session: currentSession     // ← 会话标识
+            })
+        });
+
         if (!response.ok) {
             const errorText = await response.text();
             throw new Error(`网络错误: ${response.status} ${errorText}`);
         }
+
         const data = await response.json();
-        console.log("建议数据:", data);
-        if (data.suggestionsHTML) {
-            adviceContent.innerHTML = data.suggestionsHTML;
-        } else if (data.advice) {
+
+        if (data.advice) {
             adviceContent.innerHTML = `
-                <h3>向量 RAG 错误:</h3>
+                <h3>VectorRAG Error:</h3>
                 <ul>
-                    <li>检索错误: ${data.vector_retrieve_error ?? 'N/A'}</li>
-                    <li>丢失错误: ${data.vector_lose_error ?? 'N/A'}</li>
-                    <li>丢失正确: ${data.vector_lose_correct ?? 'N/A'}</li>
+                    <li>Noise: ${data.error_count.v_error.Noise ?? 'N/A'}</li>
+                    <li>Joint Reasoning: ${data.error_count.v_error.JointReasoning ?? 'N/A'}</li>
+                    <li>Single Step Reasoning: ${data.error_count.v_error.SingleStepReasoning ?? 'N/A'}</li>
+                    <li>No Retrieval: ${data.error_count.v_error.NoRetrieval ?? 'N/A'}</li>
+                    <li>Other Errors: ${data.error_count.v_error.OtherErrors ?? 'N/A'}</li>
                 </ul>
-                <h3>图谱 RAG 错误:</h3>
+                <h3>GraphRAG Error:</h3>
                 <ul>
-                    <li>检索错误: ${data.graph_retrieve_error ?? 'N/A'}</li>
-                    <li>丢失错误: ${data.graph_lose_error ?? 'N/A'}</li>
-                    <li>丢失正确: ${data.graph_lose_correct ?? 'N/A'}</li>
+                    <li>Missing Entity: ${data.error_count.g_error.MissingEntity ?? 'N/A'}</li>
+                    <li>Incorrect Entity: ${data.error_count.g_error.IncorrectEntity ?? 'N/A'}</li>
+                    <li>Faulty Pruning: ${data.error_count.g_error.FaultyPruning ?? 'N/A'}</li>
+                    <li>Noise Interference: ${data.error_count.g_error.NoiseInterference ?? 'N/A'}</li>
+                    <li>Hop Limitation: ${data.error_count.g_error.HopLimitation ?? 'N/A'}</li>
+                    <li>Other Errors: ${data.error_count.g_error.OtherErrors ?? 'N/A'}</li>
                 </ul>
-                <h3>建议:</h3>
-                <p>${data.advice}</p>
+                <h3>HybridRAG Error:</h3>
+                <ul>
+                    <li>None-Result: ${data.error_count.h_error.NoneResult ?? 'N/A'}</li>
+                    <li>Lack Information: ${data.error_count.h_error.LackInformation ?? 'N/A'}</li>
+                    <li>Noisy: ${data.error_count.h_error.Noisy ?? 'N/A'}</li>
+                    <li>Other-Errors: ${data.error_count.h_error.OtherErrors ?? 'N/A'}</li>
+                </ul>
+                <h3>Vector Suggestions:</h3>
+                <p>${data.v_advice ?? 'N/A'}</p>
+                <h3>Graph Suggestions:</h3>
+                <p>${data.g_advice ?? 'N/A'}</p>
+
             `;
         } else {
-            adviceContent.textContent = "收到的建议数据格式不正确。";
-            console.warn("未预期的建议数据格式", data);
+            adviceContent.textContent = "建议数据格式不正确";
         }
     } catch (error) {
         console.error('获取建议时出错:', error);
         adviceContent.textContent = `无法加载建议: ${error.message}`;
     }
 }
-
 function populateSelect(selectElement, options) {
     const currentVal = selectElement.value;
     const defaultOptionText = `-- 请选择 ${selectElement.id.split('-')[1] || '选项'} --`;
@@ -1253,6 +1274,7 @@ applySettingsButton.addEventListener("click", async () => {
                                 </ul>
                             </div>
                             `;
+                            await fetchAndDisplaySuggestions();
                             applySettingsButton.innerText = "Apply Settings"
                             StopButton.disabled = true
                             break;
@@ -1472,7 +1494,7 @@ StopButton.addEventListener("click", async () => {
         console.log("设置应用成功:", result);
         
         // 可以在这里调用 fetchAndDisplaySuggestions() 如果需要
-        // await fetchAndDisplaySuggestions();
+        await fetchAndDisplaySuggestions();
         
     } catch (error) { 
         console.error("应用设置时发生错误:", error); 
@@ -1487,7 +1509,14 @@ StopButton.addEventListener("click", async () => {
 });
 
 
-
+document.addEventListener('DOMContentLoaded', function () {
+    const button = document.getElementById('show-suggestion');
+    if (button) {
+        button.addEventListener('click', async function () {
+            await fetchAndDisplaySuggestions();
+        });
+    }
+});
 
 
 // --- 检索结果显示逻辑 ---
@@ -1732,6 +1761,37 @@ historySessionSelect.addEventListener('change', (event) => {
 newHistorySessionButton.addEventListener('click', showNewSessionInput);
 newSessionNameInput.addEventListener('keydown', (event) => { if (event.key === 'Enter') { event.preventDefault(); handleConfirmNewSession(); } else if (event.key === 'Escape') { hideNewSessionInput(); } });
 cancelNewSessionButton.addEventListener('click', hideNewSessionInput);
+
+
+// 登出logout操作
+document.addEventListener('DOMContentLoaded', function () {
+    const logoutBtn = document.getElementById('logout-button');
+    if (logoutBtn) {
+        logoutBtn.addEventListener('click', function () {
+            fetch('/api/logout', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                credentials: 'include'  // 确保包含 session cookie
+            })
+            .then(response => {
+                if (response.ok) {
+                    // 可选择刷新或跳转到登录页
+                    window.location.href = '/login';
+                } else {
+                    return response.json().then(data => {
+                        alert('登出失败: ' + (data.message || '未知错误'));
+                    });
+                }
+            })
+            .catch(error => {
+                console.error('登出异常:', error);
+                alert('登出失败，请检查网络连接');
+            });
+        });
+    }
+});
 
 // function startAutoRefreshSessionHistory(intervalMs = 60000) {
 //     // 第一次立即执行一次

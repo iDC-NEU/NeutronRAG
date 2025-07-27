@@ -3,7 +3,7 @@ import time
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 
 # embed_model = HuggingFaceEmbedding(model_name="BAAI/bge-small-en-v1.5", embed_batch_size=10, device='cpu')
-embed_model = HuggingFaceEmbedding(model_name="BAAI/bge-small-en-v1.5", embed_batch_size=10)
+# embed_model = HuggingFaceEmbedding(model_name="BAAI/bge-small-en-v1.5", embed_batch_size=10)
 
 class RelItem:
     def __init__(self, key, values):
