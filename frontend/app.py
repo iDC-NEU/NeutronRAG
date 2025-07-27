@@ -3,8 +3,11 @@ import re
 import time
 import uuid
 from datetime import datetime, timezone
+
+from models import User
 from config.config import Config
 from flask import Flask, Response, request, jsonify, render_template, session
+from flask import redirect, url_for
 import os
 import sys
 from watchdog.observers import Observer
@@ -70,7 +73,7 @@ history_storage[default_session_id] = []
 # --- 原始路由 ---
 @app.route('/')
 def index():
-    return render_template('demo.html')  # 大模型页面
+    return redirect(url_for('login'))  # 大模型页面
 @app.route('/login')
 def login():
     return render_template('login.html')

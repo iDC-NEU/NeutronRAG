@@ -1,3 +1,11 @@
+<!--
+ * @Author: lpz 1565561624@qq.com
+ * @Date: 2025-04-30 10:41:10
+ * @LastEditors: lpz 1565561624@qq.com
+ * @LastEditTime: 2025-07-27 16:28:14
+ * @FilePath: /lipz/NeutronRAG/NeutronRAG/frontend/templates/login.html
+ * @Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
+-->
 <!DOCTYPE html>
 <html lang="zh-CN"> <head>
     <meta charset="UTF-8">
@@ -17,7 +25,7 @@
             <button type="submit">登录</button>
         </form>
 
-        <p class="register-link">没有账号？<a href="{{ url_for('register_page') }}">立即注册</a></p> </div>
+        <p class="register-link">没有账号？<a href="{{ url_for('register') }}">立即注册</a></p> </div>
 
     <script src="{{ url_for('static', filename='js/login.js') }}"></script>
 </body>
