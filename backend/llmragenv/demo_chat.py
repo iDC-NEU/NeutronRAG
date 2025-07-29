@@ -2,7 +2,7 @@
 Author: lpz 1565561624@qq.com
 Date: 2025-03-19 20:28:13
 LastEditors: lpz 1565561624@qq.com
-LastEditTime: 2025-05-01 23:20:23
+LastEditTime: 2025-07-29 09:50:35
 FilePath: /lipz/NeutronRAG/NeutronRAG/backend/llmragenv/demo_chat.py
 Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
 '''
@@ -28,6 +28,7 @@ import sys
 from tqdm import tqdm
 import uuid
 import random
+from database.vector.entitiesdb import EntitiesDB
 
 def append_to_json_list(filepath, new_data):
     # 如果文件不存在或为空，创建新列表
@@ -326,6 +327,7 @@ class Demo_chat:
         self.pruning = pruning
         self.strategy = strategy
         self.api_key = api_key
+        self.entities_db_name=f"{dataset_name}_entities"
         #自动匹配 URL
         self.url = Demo_chat.get_model_url(model_name=model_name)
         self.backend = "openai"
@@ -340,7 +342,8 @@ class Demo_chat:
         self.llm = self.load_llm(self.model_name,self.url,self.api_key)
         self.vectordb = MilvusDB(dataset_name, 1024, overwrite=False, store=True,retriever=True)
         self.graphdb = GraphDBFactory("nebulagraph").get_graphdb(space_name=dataset_name)
-        self.chat_graph = ChatGraphRAG(self.llm, self.graphdb)
+        self.entities_db = EntitiesDB(db_name=f"{dataset_name}_entities",entities=self.graphdb.entities,overwrite=False)
+        self.chat_graph = ChatGraphRAG(self.llm, self.graphdb,self.entities_db)
         self.chat_vector = ChatVectorRAG(self.llm,self.vectordb)
         path_name = f"chat_history/{dataset_name}/{path_name}.json"
         output_folder = f"chat_history/{dataset_name}"

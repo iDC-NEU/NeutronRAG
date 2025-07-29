@@ -109,6 +109,37 @@ class MilvusClientTool:
         print(fmt.format(f'clear collection {collection_name}'))
         self.client.drop_collection(collection_name)
 
+
+class myMilvus(Milvus):
+
+    def __init__(self, host="127.0.0.1", port="19530", **kwargs):
+        super().__init__(host=host, port=port, **kwargs)
+
+    def show_all_collections(self):
+        ret = self.list_collections()
+        print(f"=== all collections name: {ret}")
+
+    def show_collections_stats(self, collection_name):
+        ret = self.get_collection_stats(collection_name)
+        print(f"=== stat of {collection_name}: {ret}")
+
+    def show_collections_schema(self, collection_name):
+        ret = self.describe_collection(collection_name)
+        print(f"=== schema of {collection_name}: {ret}")
+
+    # def drop(self, collection_name):
+    #     ret = self.drop_collection(collection_name)
+    #     print(f'=== clear collection {collection_name}: {ret}')
+
+    # def exist(self, collection_name):
+    #     return self.has_collection(collection_name)
+
+    def get_vector_count(self, collection_name):
+        ret = self.get_collection_stats(collection_name)
+        return ret["row_count"]
+
+
+
 class MilvusDB(VectorDatabase):
 
     def __init__(self,
@@ -292,7 +323,52 @@ class MilvusDB(VectorDatabase):
         nodes = self.retriever._retrieve(query_bundle=query_bundle)
         return nodes
 
+    def insert(self, entities):
+        time_s = time.time()
+        # self.client.insert(self.collection_name, entities)
+        self.db.insert(entities)
+        time_e = time.time()
+        if self.verbose:
+            print(f"insert cost {time_e - time_s}")
 
+        self.db.load()
+    def load(self):
+        if not self.db:
+            self.db = Collection(self.collection_name)
+            self.db.load()
+
+
+    def search(self, embedding, limit=3):
+        # self.db.load()
+        # time_s = time.time()
+        # self.db.flush()
+        # time_e = time.time()
+        # print(f'time cost {time_e - time_s:.3f}')
+        search_params = {
+            "metric_type": self.metric,
+            "params": {"nprobe": 10},
+        }
+        start_time = time.time()
+        result = self.db.search(embedding, "vec", search_params, limit=limit)
+        end_time = time.time()
+
+        # logging.info(f'embedding {embedding}, search cost {end_time-start_time:.3f}')
+
+        # print(type(result), type(result[0]), type(result[0][0]))
+
+        distance = [hit.distance for hits in result for hit in hits]
+        pk = [hit.pk for hits in result for hit in hits]
+
+        if self.verbose:
+            print(f"search cost {end_time-start_time:.3f}")
+
+        # for hits in result:
+        #     print(hits)
+        #     for hit in hits:
+        #         print(f"hit: {hit}, random field: {hit.entity.get('distance')}, {hit.distance}")
+
+        return pk, distance
+  
 
 
 

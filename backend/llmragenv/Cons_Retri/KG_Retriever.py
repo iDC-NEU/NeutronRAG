@@ -2,7 +2,7 @@
 Author: fzb fzb0316@163.com
 Date: 2024-09-19 08:48:47
 LastEditors: lpz 1565561624@qq.com
-LastEditTime: 2025-04-18 10:54:19
+LastEditTime: 2025-07-29 16:03:00
 FilePath: /RAGWebUi_demo/llmragenv/Retriever/retriever_graph.py
 Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
 '''
@@ -17,9 +17,10 @@ Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查�
 from llmragenv.LLM.llm_base import LLMBase
 from database.graph.graph_database import GraphDatabase
 import numpy as np
-from llmragenv.Cons_Retri.Embedding_Model import EmbeddingEnv
+from llmragenv.Cons_Retri.Embedding_Model import EmbeddingEnv,Ollama_EmbeddingEnv
 from llmragenv.Cons_Retri.pruning import *
 import cupy as cp
+from database.vector.entitiesdb import EntitiesDB
 
 
 keyword_extract_prompt = (
@@ -269,6 +270,157 @@ class RetrieverGraph(object):
                                     reverse=True)
 
         return sorted_all_rel_scores[:topk]
+
+
+# 这个剪枝类只在EntitiesDB检索的时候使用
+class Pruning:
+
+    def __init__(
+        self,
+        device="cuda:0",
+        batch_size=10,
+        embed_model="qllama/bge-large-en-v1.5:f16",
+        step=100,
+    ):
+        self.step = step
+        self.embed_model = Ollama_EmbeddingEnv(embed_name=embed_model, embed_batch_size=batch_size, device=device)
+
+
+    def get_text_embedding(self, text):
+        embedding = self.embed_model.get_embedding(text)
+        return embedding
+
+    def get_text_embeddings(self, texts):
+        all_embeddings = []
+        n_text = len(texts)
+        for start in range(0, n_text, self.step):
+            input_texts = texts[start : min(start + self.step, n_text)]
+            embeddings = self.embed_model.get_embeddings(input_texts)
+            all_embeddings += embeddings
+        return all_embeddings
+
+    def cosine_similarity_cp(
+        self,
+        embeddings1,
+        embeddings2,
+    ) -> float:
+        # with cp.cuda.Device(0):
+        #     arr1 = cp.array([1, 2, 3])
+        #     print(cp.cuda.runtime.getDevice())  # 输出 0
+        embeddings1_gpu = cp.asarray(embeddings1)
+        embeddings2_gpu = cp.asarray(embeddings2)
+
+        product = cp.dot(embeddings1_gpu, embeddings2_gpu.T)
+
+        norm1 = cp.linalg.norm(embeddings1_gpu, axis=1, keepdims=True)
+        norm2 = cp.linalg.norm(embeddings2_gpu, axis=1, keepdims=True)
+
+        norm_product = cp.dot(norm1, norm2.T)
+
+        cosine_similarities = product / norm_product
+
+        return cp.asnumpy(cosine_similarities)
+
+    def semantic_pruning_triplets(
+        self, question, triplets, rel_embeddings=None, topk=30
+    ):
+        time_query = -time.time()
+        question_embed = np.array(self.get_text_embedding(question)).reshape(1, -1)
+        time_query += time.time()
+        # print(f"query_embedding {time_query}")
+
+        if rel_embeddings is None:
+            time_triplet_embedding = -time.time()
+            rel_embeddings = self.get_text_embeddings(triplets)
+            time_triplet_embedding += time.time()
+            print(f"kg_embedding cost {time_triplet_embedding:.3f}s")
+
+        if len(rel_embeddings) == 1:
+            rel_embeddings = np.array(rel_embeddings).reshape(1, -1)
+        else:
+            rel_embeddings = np.array(rel_embeddings)
+
+        time_start_cp = -time.time()
+        similarity_cp = self.cosine_similarity_cp(question_embed, rel_embeddings)[0]
+        time_start_cp += time.time()
+        similarity = similarity_cp
+
+        time_sort_time = -time.time()
+        all_rel_scores = [
+            (rel, score) for rel, score in zip(triplets, similarity.tolist())
+        ]
+        sorted_all_rel_scores = sorted(all_rel_scores, key=lambda x: x[1], reverse=True)
+        time_sort_time += time.time()
+        # print_text(f"sorted cost {time_start}\n", color='red')
+
+        return sorted_all_rel_scores[:topk]
+
+
+
+class RetrieverEntities(object):
+    def __init__(self,graphdb : GraphDatabase,entities_db : EntitiesDB):
+        self.entities_db = entities_db
+        self.graphdb = graphdb
+        self.prunner = Pruning()
+        
+    def retrieve(
+        self,
+        question,
+        limit=30,
+        pruning=30,
+        depth=2,
+        entnum=10,
+    ):
+        q_embeddings = self.entities_db.get_embedding(question)
+        ids, distances = self.entities_db.search(q_embeddings, limit=entnum)
+        # print(f'question: {question}')
+        # print(f'ids: {ids}')
+        # print(f'distances: {distances}')
+        similary_entities = [self.entities_db.id2entity[id] for id in ids]
+        # print(f"similary_entities: {similary_entities}")
+        entities = similary_entities
+
+        print_text(f"question: {question}\n", color="red")
+        print_text(f"entities: {entities}\n", color="red")
+
+        all_rel_map = {}
+        for entity in entities:
+            rel_map = self.graphdb.get_rel_map(entities=[entity], depth=depth, limit=limit)
+            # print('graph query', entity, '\n', rel_map, '\n')
+            all_rel_map.update(rel_map)
+        clean_rel_map = self.graphdb.clean_rel_map(all_rel_map)
+
+        knowledge_sequences = []
+
+        for k, v in clean_rel_map.items():
+            # print(k, type(v))
+            kg_seqs = self.graphdb.get_knowledge_sequence({k: v})
+            knowledge_sequences.append(kg_seqs)
+
+        # print_text(f"knowledge_sequences: {len(knowledge_sequences)}\n",
+        #             color='red')
+
+        # from utils.pruning import semantic_pruning_triplets
+
+        print("knowledge_sequences",[len(x) for x in knowledge_sequences])
+
+        if pruning > 0:
+            knowledge_sequences_pruning = []
+            for kg_seqs in knowledge_sequences:
+
+                # sorted_all_rel_scores = semantic_pruning_triplets(question,
+                sorted_all_rel_scores = self.prunner.semantic_pruning_triplets(
+                    question, kg_seqs, rel_embeddings=None, topk=pruning
+                )
+
+                kg_seqs = [rel for rel, _ in sorted_all_rel_scores]
+                knowledge_sequences_pruning.append(kg_seqs)
+
+            print([len(x) for x in knowledge_sequences_pruning])
+
+            knowledge_sequences = knowledge_sequences_pruning
+            
+        return knowledge_sequences
 
 
 

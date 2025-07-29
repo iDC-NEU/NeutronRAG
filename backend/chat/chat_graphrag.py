@@ -2,7 +2,7 @@
 Author: fzb fzb0316@163.com
 Date: 2024-09-19 08:48:47
 LastEditors: lpz 1565561624@qq.com
-LastEditTime: 2025-03-27 11:02:30
+LastEditTime: 2025-07-29 15:43:49
 FilePath: /RAGWebUi_demo/chat/chat_graphrag.py
 Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
 '''
@@ -19,7 +19,8 @@ from llama_index.core.prompts.prompt_type import PromptType
 from chat.chat_base import ChatBase
 from llmragenv.LLM.llm_base import LLMBase
 from database.graph.graph_database import GraphDatabase
-from llmragenv.Cons_Retri.KG_Retriever import RetrieverGraph
+from llmragenv.Cons_Retri.KG_Retriever import RetrieverGraph,RetrieverEntities
+from database.vector.entitiesdb import EntitiesDB
 
 
 
@@ -74,14 +75,21 @@ llama_QA_graph_prompt_with_one_context = (
 
 class ChatGraphRAG(ChatBase):
 
-    def __init__(self, llm: LLMBase, graph_db : GraphDatabase):
+    def __init__(self, llm: LLMBase, graph_db : GraphDatabase,entities_db:EntitiesDB):
         super().__init__(llm)
         self.graph_database = graph_db
+        self.entities_db =  entities_db
         self.retriver_graph = RetrieverGraph(llm,graph_db)
+        self.retriever_entites = RetrieverEntities(graph_db,entities_db)
 
     
-    def retrieve_triplets(self, message, space_name):
+    def retrieve_triplets(self, message, retrieval_function = "embedding"):
+        # 里面的graph_database是有 space的
         """
+        更新，为了多用户并发，减少llm提实体所占时间，这里改成 通过embedding去检索实体，
+        加入一个参数 retrieval function， 目前后端写死为embedding， 之后本地可以改为 llm
+
+
         Args:
             message (str): the query from users
             space_name (str): the graph name of graph database
@@ -89,7 +97,11 @@ class ChatGraphRAG(ChatBase):
         Returns:
             list[dict["source", "relationship", "destination"]]: retrieve triplets
         """
-        self.triplets = self.retriver_graph.retrieve_2hop(question=message)
+        if retrieval_function == "embedding":
+            self.triplets = self.retriever_entites.retrieve(question=message)
+
+        elif retrieval_function == "llm":
+            self.triplets = self.retriver_graph.retrieve_2hop(question=message)
         return self.triplets
     
     def get_triplets(self):
@@ -196,13 +208,16 @@ if __name__ == "__main__":
     from llmragenv.LLM.ollama.client import OllamaClient
 
     graph_db = NebulaDB()
+    entities_db = EntitiesDB(entities=graph_db.entities)
     llm = OllamaClient(model_name="llama3:8b",url="http://localhost:11434/v1",key="ollama")
 
-    chat_graph = ChatGraphRAG(llm,graph_db)
-    print(chat_graph.retriver_graph.extract_keyword(question="Curry is a famous basketball player"))
-    pruning_knowledge_sequence = chat_graph.retriver_graph.retrieve_2hop(question="Who won the 2022 Tour de France?")
+    chat_graph = ChatGraphRAG(llm,graph_db,entities_db)
 
-    print(pruning_knowledge_sequence)
+    print(chat_graph.retrieve_triplets(message="Who won the 2022 Tour de France?"))
+    # print(chat_graph.retriver_graph.extract_keyword(question="Curry is a famous basketball player"))
+    # pruning_knowledge_sequence = chat_graph.retriver_graph.retrieve_2hop(question="Who won the 2022 Tour de France?")
+
+    # print(pruning_knowledge_sequence)
 
 
 

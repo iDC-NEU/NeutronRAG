@@ -89,6 +89,7 @@ class NebulaClient:
             print(f'save {len(all_triples)} triples to {file_path}.')
 
     def get_triplets(self, space_name):
+        print("################################",space_name)
         result = self.session.execute(
             f'use {space_name}; MATCH (n1)-[e]->(n2) RETURN n1, e, n2;')
 
@@ -262,6 +263,7 @@ class NebulaDB(GraphDatabase):
         # self.graph_schema = self.store.get_schema(refresh=None)
 
         self.retriever = None
+        self.entities = self.get_all_entities()
 
         # self.triplet2id, self.triplet_embeddings = self.generate_embedding()
         # self.entities = self.get_all_entities()
