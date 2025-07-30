@@ -2,7 +2,7 @@
 Author: lpz 1565561624@qq.com
 Date: 2025-03-19 20:28:13
 LastEditors: lpz 1565561624@qq.com
-LastEditTime: 2025-07-29 09:50:35
+LastEditTime: 2025-07-30 16:32:49
 FilePath: /lipz/NeutronRAG/NeutronRAG/backend/llmragenv/demo_chat.py
 Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
 '''
@@ -29,6 +29,7 @@ from tqdm import tqdm
 import uuid
 import random
 from database.vector.entitiesdb import EntitiesDB
+from schedule.request import *
 
 def append_to_json_list(filepath, new_data):
     # 如果文件不存在或为空，创建新列表
@@ -342,7 +343,7 @@ class Demo_chat:
         self.llm = self.load_llm(self.model_name,self.url,self.api_key)
         self.vectordb = MilvusDB(dataset_name, 1024, overwrite=False, store=True,retriever=True)
         self.graphdb = GraphDBFactory("nebulagraph").get_graphdb(space_name=dataset_name)
-        self.entities_db = EntitiesDB(db_name=f"{dataset_name}_entities",entities=self.graphdb.entities,overwrite=False)
+        self.entities_db = EntitiesDB(db_name=dataset_name,entities=self.graphdb.entities,overwrite=False)
         self.chat_graph = ChatGraphRAG(self.llm, self.graphdb,self.entities_db)
         self.chat_vector = ChatVectorRAG(self.llm,self.vectordb)
         path_name = f"chat_history/{dataset_name}/{path_name}.json"
@@ -356,6 +357,20 @@ class Demo_chat:
         print(path_name)
         
         self.evaluator = Evaluator(data_name=dataset_name,mode=strategy)
+
+
+    @classmethod
+    def from_request(cls, request:Request):
+        return cls(
+            model_name = request.model_name,
+            dataset_name = request.dataset_name,
+            dataset_path = request.dataset_path,
+            top_k = request.top_k,
+            k_hop = request.k_hop,
+            keywords = request.keywords,
+            pruning = request.pruning
+        
+        )   
 
     @staticmethod
     def get_model_url(model_name):
@@ -386,6 +401,95 @@ class Demo_chat:
         response = self.llm.chat_with_ai(prompt = "How are you today",history = None)
         return response
 
+
+    def hybrid_chat_multi(self,retrieval_text,retrieval_graph,message: str,history=None):
+        if self.strategy == "Union":
+            retrieval_result = retrieval_text+retrieval_graph
+
+            #看path是否在段落中出现，出现过的path则舍弃
+        elif self.strategy == "Intersection":
+            # Only keep paths where all elements appear in the text
+            filtered_paths = []
+            for path in retrieval_graph:
+                parts = split_relation(path)
+                # Check if ALL parts appear in at least one text segment
+                all_parts_in_text = all(
+                    all(  # 改为all表示需要元组中所有元素都匹配
+                        any(element.lower() in text.lower() for text in retrieval_text)
+                        for element in part
+                    )
+                    for part in parts
+                )
+                if all_parts_in_text:
+                    filtered_paths.append(path)
+            
+            retrieval_result = filtered_paths
+        self.hybrid_retrieval_result = retrieval_text+retrieval_graph
+        Hybrid_prompt = (
+
+        "You are an expert Q&A system that is trusted around the world. "
+        "Always answer the query using the provided context information, and not prior knowledge. "
+        "Some rules to follow:\n"
+        "1. Never directly reference the given context in your answer.\n"
+        "2. Avoid statements like 'Based on the context, ...' or 'The context information ...' or anything along those lines.\n"
+        "Context information is below.\n"
+        "---------------------\n"
+        "{nodes_text}"
+
+        "{context}"
+        "---------------------\n"
+        "Given the context information and not prior knowledge, answer the query. Note that only answer questions without explanation.\n"
+        "Query: {message}\n"
+        "Answer:"
+         )
+        prompt = Hybrid_prompt.format(message = message, nodes_text = retrieval_text, context = retrieval_result)
+
+        answers = self.llm.chat_with_ai(prompt, history)
+        return answers
+
+
+###多用户版本新加功能
+
+    def handle_one_request(self,req:Request):
+        req.state = PROCESSING
+        retrieval_text = self.chat_vector.retrieval_result()
+        retrieval_graph = self.chat_graph.retrieval_result()
+        req.graph_retrieval = retrieval_graph
+        req.vector_retrieval = retrieval_text
+        req.hybrid_retrieval = retrieval_text+retrieval_text
+        query = req.query
+
+        req.vector_response = self.chat_vector.web_chat(message=query, history=None)
+        req.graph_response = self.chat_graph.web_chat(message=query, history=None)
+        req.hybrid_response = self.hybrid_chat_multi(message=query,retrieval_graph=req.graph_retrieval,retrieval_text=req.vector_retrieval)
+        item_data = self.request_evaluate(req)
+        req.item_data = item_data
+        req.state = FINISHED
+
+
+#评估一个Request的函数，需要之后继续写
+    def request_evaluate(self,req:Request):
+        v_error = False
+        g_error = False
+        h_error = False
+        item_data = {
+            "id": req.query_id,
+            "query": req.query,
+            "answer": req.answer,
+            "vector_response": req.vector_response,
+            "graph_response": req.graph_response,
+            "hybrid_response": req.hybrid_response,
+            "vector_retrieval_result": req.vector_retrieval,
+            "graph_retrieval_result": req.graph_retrieval,
+            "v_error": v_error,
+            "g_error": g_error,
+            "h_error": h_error
+        }
+
+
+        return item_data
+        
+        
 
     # 为了不浪费 chat_vector 和 chat_graph的检索结果
     def hybrid_chat(self,message: str,history=None):

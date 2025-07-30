@@ -9,7 +9,7 @@ class EntitiesDB:
     def __init__(
         self,
         entities,
-        db_name = "rgb_entities",
+        db_name = "rgb",
         embed_name="qllama/bge-large-en-v1.5:f16",
         overwrite=False,
         step=200,
@@ -19,7 +19,7 @@ class EntitiesDB:
         self.embed_model = Ollama_EmbeddingEnv(embed_name=embed_name, device=device)
 
         self.entities = sorted(list(entities))
-        self.db_name = db_name
+        self.db_name = f"{db_name}_entities"
 
         self.id2entity = {i: entity for i, entity in enumerate(self.entities)}
 
@@ -27,18 +27,18 @@ class EntitiesDB:
 
         create_new_db = True
 
-        if self.milvus_client.has_collection(db_name):
-            print(f"exist {self.milvus_client.has_collection(db_name)}")
-            print(f"count {self.milvus_client.get_vector_count(db_name)}")
+        if self.milvus_client.has_collection(self.db_name):
+            print(f"exist {self.milvus_client.has_collection(self.db_name)}")
+            print(f"count {self.milvus_client.get_vector_count(self.db_name)}")
             print(f"entities {len(entities)}")
 
         if (
             entities
-            and self.milvus_client.has_collection(db_name)
-            and self.milvus_client.get_vector_count(db_name) == len(entities)
+            and self.milvus_client.has_collection(self.db_name)
+            and self.milvus_client.get_vector_count(self.db_name) == len(entities)
         ):
             create_new_db = False
-            print(f"{db_name} is existing!")
+            print(f"{self.db_name} is existing!")
 
         overwrite = overwrite or create_new_db
 
