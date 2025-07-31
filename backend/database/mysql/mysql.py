@@ -2,10 +2,11 @@
 Author: lpz 1565561624@qq.com
 Date: 2025-07-30 19:26:29
 LastEditors: lpz 1565561624@qq.com
-LastEditTime: 2025-07-30 21:33:43
+LastEditTime: 2025-07-31 19:41:54
 FilePath: /lipz/NeutronRAG/NeutronRAG/backend/database/mysql/mysql.py
 Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
 '''
+import json
 import pymysql
 import re
 
@@ -25,13 +26,13 @@ CREATE TABLE IF NOT EXISTS `{table_name}` (
     `vector_retrieval_result` TEXT,
     `graph_retrieval_result` TEXT,
 
-    `vector_evaluation` FLOAT,
-    `graph_evaluation` FLOAT,
-    `hybrid_evaluation` FLOAT,
+    `vector_evaluation` TEXT,
+    `graph_evaluation` TEXT,
+    `hybrid_evaluation` TEXT,
 
-    `avg_vector_evaluation` FLOAT,
-    `avg_graph_evaluation` FLOAT,
-    `avg_hybrid_evaluation` FLOAT,
+    `avg_vector_evaluation` TEXT,
+    `avg_graph_evaluation` TEXT,
+    `avg_hybrid_evaluation` TEXT,
 
     `v_error` TEXT,
     `g_error` TEXT,
@@ -435,6 +436,65 @@ class MySQLManager:
             print(f"❌ 刷新 table_num 失败: {str(e)}")
             raise
 
+    def modify_evaluation_columns_to_text(self, user_id, suffix):
+        """
+        将指定用户历史记录表中的多个 FLOAT 类型列修改为 TEXT 类型
+        以支持存储完整 JSON 数据结构。
+        """
+        table_name = f"user{user_id}_history_{suffix}"
+        columns_to_modify = [
+            "vector_evaluation", "graph_evaluation", "hybrid_evaluation",
+            "avg_vector_evaluation", "avg_graph_evaluation", "avg_hybrid_evaluation"
+        ]
+
+        try:
+            for col in columns_to_modify:
+                alter_sql = f"ALTER TABLE `{table_name}` MODIFY COLUMN `{col}` TEXT;"
+                self.cursor.execute(alter_sql)
+                print(f"✅ 修改列 `{col}` 为 TEXT 类型成功")
+            print(f"🎉 表 `{table_name}` 所有指定列已更新为 TEXT")
+        except Exception as e:
+            print(f"❌ 修改表 `{table_name}` 时出错: {e}")
+
+
+
+    def load_history_from_jsonl(self, jsonl_path, user_id, suffix):
+        table_name = f"user{user_id}_history_{suffix}"
+
+        columns = [
+            "id", "query", "answer", "type",
+            "vector_response", "graph_response", "hybrid_response",
+            "vector_retrieval_result", "graph_retrieval_result",
+            "vector_evaluation", "graph_evaluation", "hybrid_evaluation",
+            "avg_vector_evaluation", "avg_graph_evaluation", "avg_hybrid_evaluation",
+            "v_error", "g_error", "h_error"
+        ]
+
+        insert_sql = f"""
+            INSERT INTO `{table_name}` ({', '.join(columns)})
+            VALUES ({', '.join(['%s'] * len(columns))})
+        """
+
+        def safe_value(val):
+            if isinstance(val, (dict, list)):
+                return json.dumps(val, ensure_ascii=False)
+            return val
+
+        try:
+            with open(jsonl_path, 'r', encoding='utf-8') as f:
+                for line_num, line in enumerate(f, 1):
+                    try:
+                        data = json.loads(line)
+                        values = [safe_value(data.get(col, None)) for col in columns]
+                        self.cursor.execute(insert_sql, values)
+                    except Exception as e:
+                        print(f"⚠️ 第 {line_num} 行处理失败：{e}")
+
+            print(f"✅ 成功导入数据到 `{table_name}`")
+        except Exception as e:
+            print(f"🚨 加载失败：{e}")
+
+
 if __name__ == "__main__":
     db = MySQLManager(
         host="127.0.0.1",
@@ -446,11 +506,19 @@ if __name__ == "__main__":
     # db.create_user_info()
     # db.get_database_table_summary()
     # # db.add_user(user_id="888",user_name="LPX")
-    db.add_history_table(user_id="10",table_suffix="test3")
+    # db.add_history_table(user_id="10",table_suffix="rgb")
     # suffixes = db.get_user_history_suffixes(user_id='888')
     # print(suffixes)
     # count = db.get_user_history_table_count(user_id="888")
     # print(count)
-    # db.print_table_contents(table_name="user")
-    db.refresh_user_table_num()
     db.print_table_contents(table_name="user")
+    db.refresh_user_table_num()
+    # db.modify_evaluation_columns_to_text("10","rgb")
+    # jsonl_path = "/home/lipz/NeutronRAG/NeutronRAG/backend/llmragenv/chat_history/rgb/000.json"
+    # db.print_table_contents(table_name="user")
+    # db.print_table_contents(table_name="10_history_rgb")
+    # print(db.get_user_history_suffixes("10"))
+    # db.del_history_table(user_id="10",table_suffix="rgb")
+    # db.print_table_contents("user10_history_rgb")
+    # db.load_history_from_jsonl(jsonl_path=jsonl_path,user_id="10",suffix="rgb")
+    db.print_table_contents("user10_history_rgb")

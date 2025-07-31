@@ -772,6 +772,12 @@ async function displaySessionHistory() {
         return;
     }
 
+
+// async function displaySessionHistory()
+
+
+
+
     // 渲染每条历史记录
     items.forEach(item => {
         const div = document.createElement('div');
@@ -1556,6 +1562,7 @@ async function handleHistoryItemClick(event) {
      // #backend-integration: GET /get-vector/${itemId} 和 GET /get-graph/${itemId}
      // Backend needs to handle UUIDs if USE_BACKEND_HISTORY=true, or mock/local IDs if false
      let vectorResponse, graphResponse;
+     console.log(currentSession,"当前的选择的表名##########################################")
      try { console.log(`正在为项 ID 获取细节: ${itemId}`); [vectorResponse, graphResponse] = await Promise.all([ fetch(`/get-vector/${itemId}?sessionName=${encodeURIComponent(currentSession)}&datasetName=${encodeURIComponent(selectedDatasetName)}`), fetch(`/get-graph/${itemId}?sessionName=${encodeURIComponent(currentSession)}&datasetName=${encodeURIComponent(selectedDatasetName)}`) ]);
         if (vectorResponse.ok) {
             const d = await vectorResponse.json(); // 解析返回的 JSON 数据
@@ -1752,12 +1759,12 @@ ragSelect.addEventListener("change", displaySelectedAnswer);
 dim1Select.addEventListener('change', updateDatasetSelection);
 dim2Select.addEventListener('change', updateDatasetSelection);
 dim3Select.addEventListener('change', updateDatasetSelection);
-historySessionSelect.addEventListener('change', (event) => {
-    const selectedValue = event.target.value;
-    if (USE_BACKEND_HISTORY) { currentSession = selectedValue; console.log("(API 模式) 会话已更改为 ID:", currentSession); }
-    else { currentHistorySessionName = selectedValue; console.log("(本地模式) 会话已更改为名称:", currentHistorySessionName); }
-    displaySessionHistory();
-});
+// historySessionSelect.addEventListener('change', (event) => {
+//     const selectedValue = event.target.value;
+//     if (USE_BACKEND_HISTORY) { currentSession = selectedValue; console.log("(API 模式) 会话已更改为 ID:", currentSession); }
+//     else { currentHistorySessionName = selectedValue; console.log("(本地模式) 会话已更改为名称:", currentHistorySessionName); }
+//     displaySessionHistory();
+// });
 newHistorySessionButton.addEventListener('click', showNewSessionInput);
 newSessionNameInput.addEventListener('keydown', (event) => { if (event.key === 'Enter') { event.preventDefault(); handleConfirmNewSession(); } else if (event.key === 'Escape') { hideNewSessionInput(); } });
 cancelNewSessionButton.addEventListener('click', hideNewSessionInput);
@@ -1794,44 +1801,236 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 
 
-document.addEventListener("DOMContentLoaded", function () {
-    const selectElement = document.getElementById("history-session-select");
+async function displayHistoryFromDatabase() {
+    const questionList = document.getElementById("question-list");
+    const suffix = document.getElementById("history-session-select").value;
 
+    questionList.innerHTML = '<li class="no-history-item">正在加载历史记录...</li>';
+    let items = [];
+
+    if (!suffix) {
+        questionList.innerHTML = '<li class="no-history-item">请选择一个历史记录表。</li>';
+        return;
+    }
+
+    try {
+        const response = await fetch(`/get-history-entries?table_suffix=${encodeURIComponent(suffix)}`, {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+
+        if (!response.ok) throw new Error(`获取失败: ${response.status}`);
+        const data = await response.json();
+        items = data.entries || [];
+
+    } catch (error) {
+        console.error(`获取历史记录失败:`, error);
+        questionList.innerHTML = `<li class="no-history-item">加载历史记录出错: ${error.message}</li>`;
+        return;
+    }
+
+    // 清空原列表内容
+    questionList.innerHTML = '';
+
+    if (items.length === 0) {
+        questionList.innerHTML = '<li class="no-history-item">该历史表暂无记录。</li>';
+        return;
+    }
+
+    // ✅ 渲染每条历史记录
+    items.forEach(item => {
+        const div = document.createElement('div');
+        div.classList.add('question-item');
+        div.id = `history-${item.id}`;
+        div.dataset.itemId = item.id;
+
+        // 设置背景颜色
+        let backgroundColor = '#f0f0f0';
+        switch (item.type?.toUpperCase()) {
+            case 'GREEN': backgroundColor = '#d9f7be'; break;
+            case 'RED': backgroundColor = '#ffccc7'; break;
+            case 'YELLOW': backgroundColor = '#fff2e8'; break;
+        }
+        div.style.backgroundColor = backgroundColor;
+
+        const answerText = typeof item.answer === 'string' ? item.answer : 
+                          item.answer ? JSON.stringify(item.answer) : '';
+        const answerSnippet = answerText ? answerText.substring(0, 30) + '...' : '';
+
+        // 缓存响应字段（可用于点击展示详细内容）
+        div.dataset.vectorResponse = item.vector_response || '';
+        div.dataset.graphResponse = item.graph_response || '';
+        div.dataset.hybridResponse = item.hybrid_response || '';
+        div.dataset.query = item.query || '';
+        div.dataset.answer = answerText;
+
+        // 渲染内容片段
+        div.innerHTML = `
+            <p><strong>ID:</strong> ${item.id}</p>
+            <p><strong>Query:</strong> ${item.query || 'N/A'}</p>
+            <p><strong>V:</strong> ${item.vector_response}</p>
+            <p><strong>G:</strong> ${item.graph_response}</p>
+            <p><strong>H:</strong> ${item.hybrid_response}</p>
+            ${answerSnippet ? `<p><strong>Ans:</strong> ${answerSnippet}</p>` : ''}
+        `;
+
+        // 点击事件（例如显示详细内容）
+        div.addEventListener('click', handleHistoryItemClick);
+        questionList.appendChild(div);
+    });
+}
+
+
+
+
+document.addEventListener("DOMContentLoaded", function () {
+    const historySessionSelect = document.getElementById('history-session-select');
+    const resultContainer = document.getElementById("question-list");
+
+    // 加载所有表项并默认加载第一个表数据
     fetch("/get-history-tables")
         .then(response => {
-            if (!response.ok) {
-                throw new Error("无法获取历史记录");
-            }
+            if (!response.ok) throw new Error("无法获取历史记录表名");
             return response.json();
         })
         .then(data => {
             const historyTables = data.history_tables || [];
-
-            // 清空旧选项
-            selectElement.innerHTML = "";
+            historySessionSelect.innerHTML = "";
 
             if (historyTables.length === 0) {
                 const opt = document.createElement("option");
                 opt.value = "";
                 opt.textContent = "无历史记录";
-                selectElement.appendChild(opt);
+                historySessionSelect.appendChild(opt);
+                resultContainer.innerHTML = "<p>暂无历史表项</p>";
                 return;
             }
 
-            // 添加历史记录选项
             historyTables.forEach(suffix => {
                 const option = document.createElement("option");
                 option.value = suffix;
                 option.textContent = suffix;
-                selectElement.appendChild(option);
+                historySessionSelect.appendChild(option);
+            });
+
+            // 默认加载第一个表项
+            const defaultSuffix = historyTables[0];
+            historySessionSelect.value = defaultSuffix;
+            currentSession = defaultSuffix
+            displayHistoryFromDatabase(defaultSuffix);
+
+            // 绑定选择器 change 事件
+            historySessionSelect.addEventListener("change", function (event) {
+                const selectedValue = event.target.value;
+                console.log("#########选择的选项#########",selectedValue)
+            
+
+                currentSession = selectedValue;
+                console.log("(API 模式) 会话已更改为 ID:", currentSession);
+                currentHistorySessionName = selectedValue;
+                console.log("(本地模式) 会话已更改为名称:", currentHistorySessionName);
+                displayHistoryFromDatabase(selectedValue);  // 调用数据库模式的渲染函数
+
             });
         })
         .catch(error => {
-            console.error("❌ 获取历史记录失败:", error);
-            selectElement.innerHTML = "<option>加载失败</option>";
+            console.error("❌ 加载历史表失败:", error);
+            resultContainer.innerHTML = "<p>加载失败</p>";
         });
-});
 
+    // 渲染历史表项的函数
+    async function displayHistoryFromDatabase(suffix) {
+        const questionList = document.getElementById("question-list");
+        questionList.innerHTML = '<li class="no-history-item">正在加载历史记录...</li>';
+        let items = [];
+
+        if (!suffix) {
+            questionList.innerHTML = '<li class="no-history-item">请选择一个历史记录表。</li>';
+            return;
+        }
+
+        try {
+            const response = await fetch(`/get-history-entries?table_suffix=${encodeURIComponent(suffix)}`, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            if (!response.ok) throw new Error(`获取失败: ${response.status}`);
+            const data = await response.json();
+            items = data.entries || [];
+        } catch (error) {
+            console.error(`获取历史记录失败:`, error);
+            questionList.innerHTML = `<li class="no-history-item">加载历史记录出错: ${error.message}</li>`;
+            return;
+        }
+
+        questionList.innerHTML = '';
+
+        if (items.length === 0) {
+            questionList.innerHTML = '<li class="no-history-item">该历史表暂无记录。</li>';
+            return;
+        }
+
+        // 渲染每条历史记录
+        items.forEach(item => {
+            const div = document.createElement('div');
+            div.classList.add('question-item');
+            div.id = `history-${item.id}`;
+            div.dataset.itemId = item.id;
+
+            // 设置背景颜色
+            let backgroundColor = '#f0f0f0';
+            switch (item.type?.toUpperCase()) {
+                case 'GREEN': backgroundColor = '#d9f7be'; break;
+                case 'RED': backgroundColor = '#ffccc7'; break;
+                case 'YELLOW': backgroundColor = '#fff2e8'; break;
+            }
+            div.style.backgroundColor = backgroundColor;
+
+            const answerText = typeof item.answer === 'string' ? item.answer :
+                              item.answer ? JSON.stringify(item.answer) : '';
+            const answerSnippet = answerText ? answerText.substring(0, 30) + '...' : '';
+
+            div.dataset.vectorResponse = item.vector_response || '';
+            div.dataset.graphResponse = item.graph_response || '';
+            div.dataset.hybridResponse = item.hybrid_response || '';
+            div.dataset.query = item.query || '';
+            div.dataset.answer = answerText;
+            console.log(item.id,item.vector_respons,item.graph_response)
+            div.innerHTML = `
+                <p><strong>id:</strong> ${item.id}</p>
+                <p><strong>query:</strong> ${item.query || 'N/A'}</p>
+                <p><strong>V:</strong> ${item.vector_response}</p>
+                <p><strong>G:</strong> ${item.graph_response}</p>
+                <p><strong>H:</strong> ${item.hybrid_response}</p>
+                ${answerSnippet ? `<p><strong>Ans:</strong> ${answerSnippet}</p>` : ''}
+            `;
+
+            div.addEventListener('click', handleHistoryItemClick);
+            questionList.appendChild(div);
+        });
+    }
+
+    // 展示详细内容
+    // function handleHistoryItemClick(event) {
+    //     const item = event.currentTarget;
+    //     const answerContentDiv = document.querySelector(".answer-content");
+
+    //     if (answerContentDiv) {
+    //         answerContentDiv.innerHTML = `
+    //             <p><strong>Query:</strong> ${item.dataset.query}</p>
+    //             <p><strong>Answer:</strong> ${item.dataset.answer}</p>
+    //             <p><strong>Vector Response:</strong> ${item.dataset.vectorResponse}</p>
+    //             <p><strong>Graph Response:</strong> ${item.dataset.graphResponse}</p>
+    //             <p><strong>Hybrid Response:</strong> ${item.dataset.hybridResponse}</p>
+    //         `;
+    //     }
+    // }
+});
 
 // function startAutoRefreshSessionHistory(intervalMs = 60000) {
 //     // 第一次立即执行一次

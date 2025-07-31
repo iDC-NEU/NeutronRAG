@@ -56,6 +56,14 @@ except ImportError as e:
     Demo_chat = None
 from evaluator import simulate
 
+################字典存入的mysql是TEXT这个在还原回来#####################
+def parse_json_field(value):
+    try:
+        return json.loads(value) if value else None
+    except Exception as e:
+        print(f"⚠️ 解析失败: {e}")
+        return None
+
 # =========================================
 # 初始化与配置
 # =========================================
@@ -840,71 +848,221 @@ def get_history_table():
 
 
 
-# --- 检索详情 API ---
+@app.route("/get-history-entries")
+@login_required
+def get_history_entries():
+    table_suffix = request.args.get("table_suffix")
+    user_id = session.get("user_id")
+
+    if not table_suffix or not user_id:
+        return jsonify({"entries": [], "error": "缺少参数 table_suffix 或用户未登录"}), 400
+
+    table_name = f"user{user_id}_history_{table_suffix}"
+
+    try:
+        print(f"📥 开始查询历史记录表 `{table_name}`")
+        cursor = mysql.cursor
+        cursor.execute(f"""
+            SELECT id, query, answer, type,
+                   vector_response, graph_response, hybrid_response
+            FROM `{table_name}`
+            ORDER BY created_at DESC
+            LIMIT 100
+        """)
+        rows = cursor.fetchall()
+
+        entries = []
+        for row in rows:
+            entries.append({
+                "id": row[0],
+                "query": row[1],
+                "answer": row[2],
+                "type": row[3],
+                "vector_response": row[4],
+                "graph_response": row[5],
+                "hybrid_response": row[6],
+            })
+
+        print(f"✅ 查询成功，共返回 {len(entries)} 条记录")
+        return jsonify({"entries": entries})
+
+    except Exception as e:
+        print(f"❌ 查询失败: {e}")
+        return jsonify({"entries": [], "error": str(e)}), 500
+
+
+
+
+
 @app.route('/get-vector/<item_id>', methods=['GET'])
 @login_required
 def get_vector(item_id):
-    # 获取与 item_id 相关的 vector 数据
-    session_name = request.args.get("sessionName")
-    dataset_name = request.args.get("datasetName")
+    # 从前端获取表后缀（suffix）
+    # session_name = request.args.get("sessionName")
+    # dataset_name = request.args.get("datasetName")
+
+    print("########进入get_vector##########")
+    table_suffix = request.args.get("sessionName")
+    print("##############table_suffix",table_suffix)
 
 
-    session_file = os.path.abspath(
-        os.path.join(os.path.dirname(__file__), '..', 'backend/llmragenv','chat_history', dataset_name,f"{session_name}.json")
-    )
-    filtered_data = load_and_filter_data(session_file, item_id)
-    retrieval_result = []
-    if filtered_data:
-         # 确保前端期望的 'chunks' 键存在
-        if 'vector_retrieval_result' in filtered_data and isinstance(filtered_data['vector_retrieval_result'], list):
-            
-             # 简单地将 retrieve_results 的值（假设是文本列表）转换为 chunk 对象
-             for text_list in filtered_data['vector_retrieval_result']:
-                 retrieval_result.append(text_list)
-        
-        # print("#######retrieval_result########",retrieval_result)
-        result = {
+
+    if not table_suffix:
+        return jsonify({'error': '缺少参数 tableSuffix'}), 400
+
+    user_id = session.get("user_id")
+
+
+    table_name = f"user{user_id}_history_{table_suffix}"
+
+    try:
+        # 查询该表中的指定 item
+        query_sql = f"SELECT vector_retrieval_result FROM `{table_name}` WHERE id = %s"
+        cursor = mysql.cursor
+        cursor.execute(query_sql, (item_id,))
+        result = cursor.fetchone()
+
+        if not result:
+            return jsonify({'error': f'未找到 ID 为 {item_id} 的记录'}), 404
+
+        # 解析 vector_retrieval_result 字段
+        raw_retrieval = result[0]
+        try:
+            retrieval_chunks = json.loads(raw_retrieval) if raw_retrieval else []
+        except json.JSONDecodeError:
+            retrieval_chunks = [raw_retrieval]  # 非 JSON 列表，原样返回
+
+        return jsonify({
             'id': item_id,
-            'chunks': retrieval_result
-            
-        }
+            'chunks': retrieval_chunks
+        })
 
-        return jsonify(result)  # 返回处理后的数据
-    else:
-        return jsonify({'error': f'Item not found or invalid ID format for vector lookup: {item_id}'}), 404
+    except Exception as e:
+        return jsonify({'error': f'查询失败: {str(e)}'}), 500
+
 
 @app.route('/get-graph/<item_id>', methods=['GET'])
 @login_required
 def get_graph(item_id):
-    session_name = request.args.get("sessionName")
-    dataset_name = request.args.get("datasetName")
+    user_id = session.get("user_id")
+    table_suffix = request.args.get("sessionName")
 
+    if not user_id or not table_suffix:
+        return jsonify({'error': '缺少参数 tableSuffix 或用户未登录'}), 400
 
-    session_file = os.path.abspath(
-        os.path.join(os.path.dirname(__file__), '..', 'backend/llmragenv','chat_history', dataset_name,f"{session_name}.json")
-    )
-    filtered_data = load_and_filter_data(session_file, item_id)
-    if filtered_data and 'graph_retrieval_result' in filtered_data:
-        evidence_entity,evidence_path = get_evidence(EVIDENCE_FILE_PATH,item_id)
-        # 转换 retrieve_results 为三元组
-        triples = convert_rel_to_triplets(filtered_data["graph_retrieval_result"])
-        print("############triples###########",triples)
+    table_name = f"user{user_id}_history_{table_suffix}"
+
+    try:
+        cursor = mysql.cursor
+        query_sql = f"SELECT graph_retrieval_result FROM `{table_name}` WHERE id = %s"
+        cursor.execute(query_sql, (item_id,))
+        result = cursor.fetchone()
+
+        if not result:
+            return jsonify({'error': f'未找到 ID 为 {item_id} 的记录'}), 404
+
+        # 获取 graph_retrieval_result 字段（可能是 JSON 字符串或 list）
+        raw_graph_data = result[0]
+
+        try:
+            graph_data = json.loads(raw_graph_data) if isinstance(raw_graph_data, str) else raw_graph_data
+        except json.JSONDecodeError:
+            return jsonify({'error': '图数据格式解析失败（不是合法 JSON）'}), 500
+
+        # 获取图结构
+        evidence_entity, evidence_path = get_evidence(EVIDENCE_FILE_PATH, item_id)
+        triples = convert_rel_to_triplets(graph_data)
+
         if not triples:
-             # print(f"Warning: No triples generated for item {item_id}. Returning empty graph.")
-             return jsonify({'edges': [], 'nodes': [], 'highlighted-edge': [], 'highlighted-node': []})
+            return jsonify({'edges': [], 'nodes': [], 'highlighted-edge': [], 'highlighted-node': []})
 
-        json_result = triples_to_json(triples,evidence_entity,evidence_path)
-        # print("================= GRAPH RESPONSE =================") # 原始调试信息
-        # print(json.dumps(json_result, indent=2))                  # 原始调试信息
-        # print("================================================") # 原始调试信息
-        return jsonify(json_result)  # 返回找到的数据
-    elif filtered_data is None:
-         # 如果 load_and_filter_data 返回 None (ID 不是整数或文件找不到)
-        return jsonify({'error': f'Item not found or invalid ID format for graph lookup: {item_id}'}), 404
-    else:
-        # 如果找到了数据但格式不对
-        print(f"Warning: Graph data format error or missing 'retrieve_results' for item {item_id}")
-        return jsonify({'error': f'Data format error for graph item {item_id}'}), 500
+        json_result = triples_to_json(triples, evidence_entity, evidence_path)
+        return jsonify(json_result)
+
+    except Exception as e:
+        print(f"❌ get-graph 查询失败: {e}")
+        return jsonify({'error': f'数据库查询错误: {str(e)}'}), 500
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# --- 检索详情 API 本地版本，从文件路径中读取 ---
+# @app.route('/get-vector/<item_id>', methods=['GET'])
+# @login_required
+# def get_vector(item_id):
+#     # 获取与 item_id 相关的 vector 数据
+#     session_name = request.args.get("sessionName")
+#     dataset_name = request.args.get("datasetName")
+
+
+#     session_file = os.path.abspath(
+#         os.path.join(os.path.dirname(__file__), '..', 'backend/llmragenv','chat_history', dataset_name,f"{session_name}.json")
+#     )
+#     filtered_data = load_and_filter_data(session_file, item_id)
+#     retrieval_result = []
+#     if filtered_data:
+#          # 确保前端期望的 'chunks' 键存在
+#         if 'vector_retrieval_result' in filtered_data and isinstance(filtered_data['vector_retrieval_result'], list):
+            
+#              # 简单地将 retrieve_results 的值（假设是文本列表）转换为 chunk 对象
+#              for text_list in filtered_data['vector_retrieval_result']:
+#                  retrieval_result.append(text_list)
+        
+#         # print("#######retrieval_result########",retrieval_result)
+#         result = {
+#             'id': item_id,
+#             'chunks': retrieval_result
+            
+#         }
+
+#         return jsonify(result)  # 返回处理后的数据
+#     else:
+#         return jsonify({'error': f'Item not found or invalid ID format for vector lookup: {item_id}'}), 404
+
+# @app.route('/get-graph/<item_id>', methods=['GET'])
+# @login_required
+# def get_graph(item_id):
+#     session_name = request.args.get("sessionName")
+#     dataset_name = request.args.get("datasetName")
+
+
+#     session_file = os.path.abspath(
+#         os.path.join(os.path.dirname(__file__), '..', 'backend/llmragenv','chat_history', dataset_name,f"{session_name}.json")
+#     )
+#     filtered_data = load_and_filter_data(session_file, item_id)
+#     if filtered_data and 'graph_retrieval_result' in filtered_data:
+#         evidence_entity,evidence_path = get_evidence(EVIDENCE_FILE_PATH,item_id)
+#         # 转换 retrieve_results 为三元组
+#         triples = convert_rel_to_triplets(filtered_data["graph_retrieval_result"])
+#         print("############triples###########",triples)
+#         if not triples:
+#              # print(f"Warning: No triples generated for item {item_id}. Returning empty graph.")
+#              return jsonify({'edges': [], 'nodes': [], 'highlighted-edge': [], 'highlighted-node': []})
+
+#         json_result = triples_to_json(triples,evidence_entity,evidence_path)
+#         # print("================= GRAPH RESPONSE =================") # 原始调试信息
+#         # print(json.dumps(json_result, indent=2))                  # 原始调试信息
+#         # print("================================================") # 原始调试信息
+#         return jsonify(json_result)  # 返回找到的数据
+#     elif filtered_data is None:
+#          # 如果 load_and_filter_data 返回 None (ID 不是整数或文件找不到)
+#         return jsonify({'error': f'Item not found or invalid ID format for graph lookup: {item_id}'}), 404
+#     else:
+#         # 如果找到了数据但格式不对
+#         print(f"Warning: Graph data format error or missing 'retrieve_results' for item {item_id}")
+#         return jsonify({'error': f'Data format error for graph item {item_id}'}), 500
 
 # --- 分析 / 建议路由 ---
 @app.route('/get_suggestions', methods=['GET'])
