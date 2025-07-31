@@ -23,9 +23,10 @@ from zhipuai import ZhipuAI
 #from config.config import Config
 from db_setup import db
 from models import User, ChatSession, ChatMessage
+from database.mysql.mysql import MySQLManager
 #from user import User
 
-
+mysql = MySQLManager(database="chat")
 
 current_dir = os.getcwd()
 
@@ -801,6 +802,44 @@ def read_file():
     except Exception as e:
         print(f"Error reading file {file_path}: {e}")
         return jsonify({'error': str(e)}), 500
+    
+#通过用户名字在数据表中指定，显示出该用户的所有对话历史table    
+# 返回示例
+# {
+#   "user_name": "Alice",
+#   "user_id": "u_123",
+#   "history_tables": ["test1", "eval_0429", "final"]
+# }
+
+@app.route("/get-history-tables", methods=["GET"])
+def get_history_table():
+    """
+    通过 session 中的 user_name，返回该用户所有历史表后缀
+    """
+    user_name = session.get("username")
+    user_id = session.get("user_id")
+    if not user_name:
+        return jsonify({"error": "未登录，无法获取 username"}), 401
+
+    try:
+        print("##########开始查询########")
+        print(user_name,"#####################")
+        # 查询 user_id
+        suffixes = mysql.get_user_history_suffixes(str(user_id))
+        print(suffixes)
+        print("结束查询user表")
+
+        return jsonify({
+            "user_name": user_name,
+            "id": user_id,
+            "history_tables": suffixes
+        })
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+
 # --- 检索详情 API ---
 @app.route('/get-vector/<item_id>', methods=['GET'])
 @login_required

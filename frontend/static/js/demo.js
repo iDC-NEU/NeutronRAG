@@ -1793,6 +1793,46 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 });
 
+
+document.addEventListener("DOMContentLoaded", function () {
+    const selectElement = document.getElementById("history-session-select");
+
+    fetch("/get-history-tables")
+        .then(response => {
+            if (!response.ok) {
+                throw new Error("无法获取历史记录");
+            }
+            return response.json();
+        })
+        .then(data => {
+            const historyTables = data.history_tables || [];
+
+            // 清空旧选项
+            selectElement.innerHTML = "";
+
+            if (historyTables.length === 0) {
+                const opt = document.createElement("option");
+                opt.value = "";
+                opt.textContent = "无历史记录";
+                selectElement.appendChild(opt);
+                return;
+            }
+
+            // 添加历史记录选项
+            historyTables.forEach(suffix => {
+                const option = document.createElement("option");
+                option.value = suffix;
+                option.textContent = suffix;
+                selectElement.appendChild(option);
+            });
+        })
+        .catch(error => {
+            console.error("❌ 获取历史记录失败:", error);
+            selectElement.innerHTML = "<option>加载失败</option>";
+        });
+});
+
+
 // function startAutoRefreshSessionHistory(intervalMs = 60000) {
 //     // 第一次立即执行一次
 //     displaySessionHistory();

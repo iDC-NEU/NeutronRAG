@@ -2,7 +2,7 @@
 Author: lpz 1565561624@qq.com
 Date: 2025-02-09 18:31:22
 LastEditors: lpz 1565561624@qq.com
-LastEditTime: 2025-04-29 12:45:10
+LastEditTime: 2025-07-30 20:54:24
 FilePath: /NeutronRAG/NeutronRAG/frontend/user.py
 Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
 '''
@@ -19,7 +19,8 @@ class User:
         self.password = password
         self.user_id = None  # 初始化 user_id
         self.conn = mysql.connector.connect(**db_chat_config)  # 使用导入的配置创建连接  
-        self.cursor = self.conn.cursor() 
+        self.cursor = self.conn.cursor()
+        self.table_num = 0
 
     def _is_valid_email(self) -> bool:
         return re.match(r"[^@]+@[^@]+\.[^@]+", self.email) is not None
@@ -53,7 +54,7 @@ class User:
         self.cursor.execute('''
             INSERT INTO user (username, email, phone, password) 
             VALUES (%s, %s, %s, %s)
-        ''', (self.username, self.email, self.phone, self.password))
+        ''', (self.username, self.email, self.phone, self.password,self.table_num))
         self.conn.commit()
         return True
 

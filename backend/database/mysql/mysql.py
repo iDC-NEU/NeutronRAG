@@ -1,0 +1,456 @@
+'''
+Author: lpz 1565561624@qq.com
+Date: 2025-07-30 19:26:29
+LastEditors: lpz 1565561624@qq.com
+LastEditTime: 2025-07-30 21:33:43
+FilePath: /lipz/NeutronRAG/NeutronRAG/backend/database/mysql/mysql.py
+Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
+'''
+import pymysql
+import re
+
+
+####history schema###   用于创建用户的历史测评记录表
+HISTORY_TABLE_SCHEMA_TEMPLATE = """
+CREATE TABLE IF NOT EXISTS `{table_name}` (
+    `id` VARCHAR(64) PRIMARY KEY,
+    `query` TEXT NOT NULL,
+    `answer` TEXT,
+    `type` ENUM('GREEN', 'YELLOW', 'RED') DEFAULT NULL,
+
+    `vector_response` TEXT,
+    `graph_response` TEXT,
+    `hybrid_response` TEXT,
+
+    `vector_retrieval_result` TEXT,
+    `graph_retrieval_result` TEXT,
+
+    `vector_evaluation` FLOAT,
+    `graph_evaluation` FLOAT,
+    `hybrid_evaluation` FLOAT,
+
+    `avg_vector_evaluation` FLOAT,
+    `avg_graph_evaluation` FLOAT,
+    `avg_hybrid_evaluation` FLOAT,
+
+    `v_error` TEXT,
+    `g_error` TEXT,
+    `h_error` TEXT,
+
+    `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+"""
+
+
+USER_INFO_TABLE_SCHEMA_TEMPLATE = """
+CREATE TABLE IF NOT EXISTS `user_info` (
+    `user_id` VARCHAR(64) PRIMARY KEY,
+    `user_name` VARCHAR(20) NOT NULL,
+    `table_num` INT DEFAULT 0
+);
+"""
+
+class MySQLManager:
+    def __init__(self, host="127.0.0.1", port=3307, user="root", password="a123456", database="your_database"):
+        self.conn = pymysql.connect(
+            host=host,
+            port=port,
+            user=user,
+            password=password,
+            database=database,
+            charset="utf8mb4",
+            autocommit=True
+        )
+        self.cursor = self.conn.cursor()
+
+    def close(self):
+        self.cursor.close()
+        self.conn.close()
+
+    def is_valid_table_name(self, table_name):
+        return re.match(r'^[A-Za-z0-9_]+$', table_name) is not None
+
+    def create_user_table(self, user_id, table_name):
+        if not self.is_valid_table_name(table_name):
+            raise ValueError("Invalid table name.")
+
+        full_table_name = f"user{user_id}_{table_name}"
+        schema_sql = f"""
+        CREATE TABLE IF NOT EXISTS `{full_table_name}` (
+            `id` INT AUTO_INCREMENT PRIMARY KEY,
+            `question` TEXT NOT NULL,
+            `answer` TEXT,
+            `type` ENUM('GREEN', 'YELLOW', 'RED') DEFAULT 'GREEN',
+            `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+        self.cursor.execute(schema_sql)
+        return full_table_name
+
+    def table_exists(self, table_name):
+        """
+        检查当前数据库中某张表是否存在。
+        :param table_name: 要检查的表名
+        :return: True 如果存在，False 如果不存在
+        """
+        try:
+            self.cursor.execute("""
+                SELECT COUNT(*)
+                FROM information_schema.tables
+                WHERE table_schema = %s AND table_name = %s
+            """, (self.conn.db.decode(), table_name))
+            result = self.cursor.fetchone()
+            return result[0] > 0
+        except Exception as e:
+            print("❌ 检查表是否存在时出错：", str(e))
+            raise
+
+    # def create_user_info(self):
+    #     """
+    #     创建 user_info 表（如果尚不存在）
+    #     """
+    #     if self.table_exists("user_info"):
+    #         print("ℹ️ user_info 表已存在，无需创建。")
+    #         return
+
+    #     try:
+    #         self.cursor.execute(USER_INFO_TABLE_SCHEMA_TEMPLATE)
+    #         print("✅ user_info 表已成功创建。")
+    #     except Exception as e:
+    #         print("❌ 创建 user_info 表时出错：", str(e))
+    #         raise
+    def get_database_table_summary(self):
+        """
+        获取当前数据库中所有表的数量及每张表的基本信息（字段数、创建时间等）。
+        返回一个 dict，包含表名、字段数、创建时间等信息。
+        """
+        try:
+            # 当前数据库名
+            db_name = self.conn.db.decode()
+
+            # 查询所有表
+            self.cursor.execute("""
+                SELECT table_name, create_time
+                FROM information_schema.tables
+                WHERE table_schema = %s
+            """, (db_name,))
+            tables = self.cursor.fetchall()
+
+            summary = {
+                "database": db_name,
+                "total_tables": len(tables),
+                "tables": []
+            }
+
+            for table_name, create_time in tables:
+                # 查询字段数量
+                self.cursor.execute("""
+                    SELECT COUNT(*)
+                    FROM information_schema.columns
+                    WHERE table_schema = %s AND table_name = %s
+                """, (db_name, table_name))
+                column_count = self.cursor.fetchone()[0]
+
+                summary["tables"].append({
+                    "table_name": table_name,
+                    "column_count": column_count,
+                    "create_time": str(create_time) if create_time else "unknown"
+                })
+
+            print(summary)
+
+        except Exception as e:
+            print("❌ 获取数据库信息失败：", str(e))
+            raise
+
+    def add_history_table(self, user_id, table_suffix):
+        """
+        创建一张新的历史记录表（如果不存在）。
+        表名格式: user{user_id}_history_{table_suffix}
+        同时将 user 表中对应用户的 table_num 字段 +1。
+        """
+        user_id = str(user_id)
+
+        if not self.is_valid_table_name(table_suffix):
+            raise ValueError("非法表名，仅支持字母、数字、下划线")
+
+        full_table_name = f"user{user_id}_history_{table_suffix}"
+
+        if self.table_exists(full_table_name):
+            print(f"ℹ️ 表 `{full_table_name}` 已存在，无需创建。")
+            return full_table_name
+
+        try:
+            # 创建历史表
+            create_sql = HISTORY_TABLE_SCHEMA_TEMPLATE.format(table_name=full_table_name)
+            self.cursor.execute(create_sql)
+            print(f"✅ 成功创建历史表 `{full_table_name}`")
+
+            # 更新 user 表中 table_num 字段 +1
+            self.cursor.execute("""
+                UPDATE `user` SET table_num = table_num + 1 WHERE id = %s
+            """, (user_id,))
+            print(f"🔄 已更新 `user` 表中 `{user_id}` 的 table_num +1")
+
+            self.conn.commit()
+            return full_table_name
+
+        except Exception as e:
+            self.conn.rollback()
+            print(f"❌ 创建历史表 `{full_table_name}` 或更新 user 表失败: {str(e)}")
+            raise
+
+    def del_history_table(self, user_id, table_suffix):
+        """
+        删除一张用户的历史记录表（如果存在）。
+        表名格式: user{user_id}_history_{table_suffix}
+        """
+        if not self.is_valid_table_name(table_suffix):
+            raise ValueError("非法表名，仅支持字母、数字、下划线")
+
+        full_table_name = f"user{user_id}_history_{table_suffix}"
+
+        if not self.table_exists(full_table_name):
+            print(f"ℹ️ 表 `{full_table_name}` 不存在，无法删除。")
+            return False
+
+        try:
+            self.cursor.execute(f"DROP TABLE `{full_table_name}`")
+            print(f"🗑️ 成功删除历史表 `{full_table_name}`")
+            return True
+        except Exception as e:
+            print(f"❌ 删除表 `{full_table_name}` 失败: {str(e)}")
+            raise
+
+
+    
+    # def add_user(self, user_id, user_name):
+    #     """
+    #     添加一个新用户到 user_info 表中。
+    #     如果已存在则报错。
+    #     """
+    #     if not self.is_valid_table_name(user_id) or not self.is_valid_table_name(user_name):
+    #         raise ValueError("非法 user_id 或 user_name。")
+
+    #     # 检查是否已存在
+    #     self.cursor.execute("SELECT COUNT(*) FROM user_info WHERE user_id = %s", (user_id,))
+    #     if self.cursor.fetchone()[0] > 0:
+    #         raise ValueError(f"用户 `{user_id}` 已存在。")
+
+    #     try:
+    #         self.cursor.execute(
+    #             "INSERT INTO user_info (user_id, user_name, table_num) VALUES (%s, %s, %s)",
+    #             (user_id, user_name, 0)
+    #         )
+    #         print(f"✅ 成功添加用户 `{user_id}`（{user_name}）")
+    #     except Exception as e:
+    #         print(f"❌ 添加用户失败: {str(e)}")
+    #         raise
+
+    def delete_user(self, user_id):
+        """
+        删除用户信息并删除其所有历史记录表（user{user_id}_history_*）。
+        """
+        if not self.is_valid_table_name(user_id):
+            raise ValueError("非法 user_id")
+
+        try:
+            # 查找所有该用户创建的历史表
+            self.cursor.execute("""
+                SELECT table_name FROM information_schema.tables
+                WHERE table_schema = %s AND table_name LIKE %s
+            """, (self.conn.db.decode(), f"user{user_id}_history_%"))
+
+            user_tables = [row[0] for row in self.cursor.fetchall()]
+
+            # 删除所有表
+            for table in user_tables:
+                self.cursor.execute(f"DROP TABLE IF EXISTS `{table}`")
+                print(f"🗑️ 已删除表 `{table}`")
+
+            # 删除 user_info 中的记录
+            self.cursor.execute("DELETE FROM user WHERE user_id = %s", (user_id,))
+            print(f"✅ 已删除用户 `{user_id}` 及其 {len(user_tables)} 张历史表")
+
+        except Exception as e:
+            print(f"❌ 删除用户失败: {str(e)}")
+            raise
+
+
+
+    def get_user_history_suffixes(self, user_id):
+        """
+        获取某个用户所有历史表的后缀名（如 testset1, testset2...）
+        :param user_id: 用户ID（如 3）
+        :return: List[str] 后缀名列表
+        """
+        if not self.is_valid_table_name(user_id):
+            raise ValueError("非法 user_id")
+
+        try:
+            self.cursor.execute("""
+                SELECT table_name FROM information_schema.tables
+                WHERE table_schema = %s AND table_name LIKE %s
+            """, (self.conn.db.decode(), f"user{user_id}_history_%"))
+
+            table_names = [row[0] for row in self.cursor.fetchall()]
+
+            # 提取后缀部分
+            suffixes = []
+            prefix = f"user{user_id}_history_"
+            for table_name in table_names:
+                if table_name.startswith(prefix):
+                    suffixes.append(table_name[len(prefix):])
+
+            return suffixes
+
+        except Exception as e:
+            print(f"❌ 获取用户 `{user_id}` 的历史表失败: {str(e)}")
+            raise
+
+    
+    def get_user_history_table_count(self, user_id):
+        """
+        获取某个用户创建的历史记录表总数。
+        表名格式为: user{user_id}_history_*
+
+        :param user_id: 用户ID（字符串或数字）
+        :return: int 表的数量
+        """
+        if not self.is_valid_table_name(user_id):
+            raise ValueError("非法 user_id")
+
+        try:
+            self.cursor.execute("""
+                SELECT COUNT(*) FROM information_schema.tables
+                WHERE table_schema = %s AND table_name LIKE %s
+            """, (self.conn.db.decode(), f"user{user_id}_history_%"))
+
+            count = self.cursor.fetchone()[0]
+            return count
+
+        except Exception as e:
+            print(f"❌ 获取用户 `{user_id}` 历史表数量失败: {str(e)}")
+            raise
+
+    def print_table_contents(self, table_name, limit=None):
+        """
+        打印指定表中的所有数据（可选限制条数）
+        :param table_name: 表名
+        :param limit: 限制最多打印的条数（默认None表示不限制）
+        """
+        if not self.is_valid_table_name(table_name):
+            raise ValueError("非法表名，仅允许字母、数字、下划线")
+
+        try:
+            # 查询字段名
+            self.cursor.execute(f"SHOW COLUMNS FROM `{table_name}`")
+            columns = [col[0] for col in self.cursor.fetchall()]
+
+            # 查询所有行数据
+            sql = f"SELECT * FROM `{table_name}`"
+            if limit:
+                sql += f" LIMIT {limit}"
+
+            self.cursor.execute(sql)
+            rows = self.cursor.fetchall()
+
+            if not rows:
+                print(f"ℹ️ 表 `{table_name}` 为空")
+                return
+
+            # 打印表头
+            print(f"\n📋 表 `{table_name}` 内容：")
+            print("-" * 80)
+            print(" | ".join(columns))
+            print("-" * 80)
+
+            # 打印每行
+            for row in rows:
+                print(" | ".join(str(value) if value is not None else "NULL" for value in row))
+            print("-" * 80)
+
+        except Exception as e:
+            print(f"❌ 打印表 `{table_name}` 内容失败: {str(e)}")
+            raise
+
+
+    def add_table_num_column_to_user(self):
+        """
+        向 `user` 表添加 `table_num` 列（如果不存在）。
+        """
+        try:
+            # 检查该列是否已存在
+            self.cursor.execute("""
+                SELECT COUNT(*) FROM information_schema.columns
+                WHERE table_schema = %s AND table_name = %s AND column_name = %s
+            """, (self.conn.db.decode(), "user", "table_num"))
+            exists = self.cursor.fetchone()[0] > 0
+
+            if exists:
+                print("ℹ️ 列 `table_num` 已存在于 `user` 表中。")
+                return
+
+            # 添加列
+            self.cursor.execute("""
+                ALTER TABLE `user`
+                ADD COLUMN `table_num` INT DEFAULT 0
+            """)
+            print("✅ 已成功为 `user` 表添加列 `table_num`。")
+
+        except Exception as e:
+            print(f"❌ 添加列失败: {str(e)}")
+            raise
+
+
+    def refresh_user_table_num(self):
+        """
+        刷新 user_info 表中所有用户的 table_num 字段。
+        对每个用户重新统计其创建的历史表数量，并更新到 user_info 中。
+        """
+        try:
+            # 获取所有用户的 user_id
+            self.cursor.execute("SELECT id FROM user")
+            users = [row[0] for row in self.cursor.fetchall()]
+
+            for user_id in users:
+
+                # 统计该用户拥有的历史表数
+                self.cursor.execute("""
+                    SELECT COUNT(*) FROM information_schema.tables
+                    WHERE table_schema = %s AND table_name LIKE %s
+                """, (self.conn.db.decode(), f"user{user_id}_history_%"))
+                table_count = self.cursor.fetchone()[0]
+
+                # 更新 user_info 中该用户的 table_num 字段
+                self.cursor.execute(
+                    "UPDATE user SET table_num = %s WHERE id = %s",
+                    (table_count, user_id)
+                )
+                print(f"✅ 已更新用户 `{user_id}` 的 table_num = {table_count}")
+
+            self.conn.commit()
+
+        except Exception as e:
+            print(f"❌ 刷新 table_num 失败: {str(e)}")
+            raise
+
+if __name__ == "__main__":
+    db = MySQLManager(
+        host="127.0.0.1",
+        port=3307,
+        user="root",
+        password="a123456",
+        database="chat"
+    )
+    # db.create_user_info()
+    # db.get_database_table_summary()
+    # # db.add_user(user_id="888",user_name="LPX")
+    db.add_history_table(user_id="10",table_suffix="test3")
+    # suffixes = db.get_user_history_suffixes(user_id='888')
+    # print(suffixes)
+    # count = db.get_user_history_table_count(user_id="888")
+    # print(count)
+    # db.print_table_contents(table_name="user")
+    db.refresh_user_table_num()
+    db.print_table_contents(table_name="user")
