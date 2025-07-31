@@ -2,7 +2,7 @@
 Author: lpz 1565561624@qq.com
 Date: 2025-07-30 19:26:29
 LastEditors: lpz 1565561624@qq.com
-LastEditTime: 2025-07-31 19:41:54
+LastEditTime: 2025-07-31 21:02:35
 FilePath: /lipz/NeutronRAG/NeutronRAG/backend/database/mysql/mysql.py
 Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
 '''
@@ -203,7 +203,7 @@ class MySQLManager:
 
     def del_history_table(self, user_id, table_suffix):
         """
-        删除一张用户的历史记录表（如果存在）。
+        删除指定用户的历史记录表，并同步减少 user 表中的 table_num 计数。
         表名格式: user{user_id}_history_{table_suffix}
         """
         if not self.is_valid_table_name(table_suffix):
@@ -216,12 +216,22 @@ class MySQLManager:
             return False
 
         try:
+            # 删除表
             self.cursor.execute(f"DROP TABLE `{full_table_name}`")
             print(f"🗑️ 成功删除历史表 `{full_table_name}`")
+
+            # 更新 user 表中的 table_num -= 1，确保不为负数
+            self.cursor.execute(
+                "UPDATE user SET table_num = GREATEST(table_num - 1, 0) WHERE id = %s",
+                (user_id,)
+            )
+            print(f"📉 用户 {user_id} 的表计数 table_num -1")
+
             return True
         except Exception as e:
             print(f"❌ 删除表 `{full_table_name}` 失败: {str(e)}")
             raise
+
 
 
     
