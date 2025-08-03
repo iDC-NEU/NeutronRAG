@@ -46,6 +46,21 @@
                     <i class="material-icons">expand_more</i>
                 </div>
                 <div class="sidebar-content setting-content">
+                    <!-- 会话管理区域 -->
+                    <div class="session-management">
+                        <div class="session-header">
+                            <h4>对话历史管理</h4>
+                            <button id="add-session-btn" class="add-session-btn" title="添加新对话表">
+                                <i class="material-icons">add</i>
+                            </button>
+                        </div>
+                        <div id="session-list" class="session-list">
+                            <!-- 会话列表将动态加载 -->
+                        </div>
+                        <div id="session-limit-warning" class="session-limit-warning" style="display: none;">
+                            已达到最大对话表数量限制(5个)
+                        </div>
+                    </div>
                     <div class="input-group">
                         <label for="model-select">Model:</label>
                         <select id="model-select" name="model-select">
@@ -55,7 +70,7 @@
                             <option value="deepseek-reasoner">DeepSeek-R1</option>
                             <option value="qwen-turbo-latest">qwen-turbo-latest</option>
                             <option value="qwen-plus">qwen-plus</option>
-                            </select>
+                        </select>
                     </div>
                     <div class="input-group">
                         <label for="api-key-input">API-KEY:</label>

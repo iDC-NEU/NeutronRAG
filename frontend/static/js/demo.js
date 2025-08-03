@@ -1734,23 +1734,236 @@ function toggleResize(iconElement, targetType = 'section') {
     }
 }
 
-// --- 初始化 ---
-document.addEventListener('DOMContentLoaded', async () => {
+// SessionManager 类 - 用于管理用户会话
+document.addEventListener('DOMContentLoaded', function() {
+    class SessionManager {
+        constructor() {
+            this.sessions = [];
+            this.currentSession = null;
+            this.maxLimit = 5;
+            this.canCreateMore = true;
+            
+            // DOM元素
+            this.addBtn = document.getElementById('add-session-btn');
+            this.sessionList = document.getElementById('session-list');
+            this.limitWarning = document.getElementById('session-limit-warning');
+            
+            this.init();
+        }
+        
+        async init() {
+            await this.loadSessions();
+            this.bindEvents();
+        }
+        
+        async loadSessions() {
+            try {
+                const response = await fetch('/api/sessions');
+                if (!response.ok) throw new Error('获取会话列表失败');
+                
+                const data = await response.json();
+                this.sessions = data.sessions || [];
+                this.maxLimit = data.max_limit || 5;
+                this.canCreateMore = data.can_create_more;
+                
+                this.renderSessions();
+                this.updateUIState();
+            } catch (error) {
+                console.error('加载会话失败:', error);
+                this.showError('加载会话失败，请刷新页面重试');
+            }
+        }
+        
+        renderSessions() {
+            this.sessionList.innerHTML = '';
+            
+            if (this.sessions.length === 0) {
+                this.sessionList.innerHTML = '<div class="empty-session">暂无对话记录</div>';
+                return;
+            }
+            
+            this.sessions.forEach(session => {
+                const sessionEl = this.createSessionElement(session);
+                this.sessionList.appendChild(sessionEl);
+            });
+        }
+        
+        createSessionElement(session) {
+            const div = document.createElement('div');
+            div.className = 'session-item';
+            div.innerHTML = `
+                <div class="session-info">
+                    <div class="session-name">${session.name}</div>
+                    <div class="session-time">${this.formatTime(session.create_time)}</div>
+                </div>
+                <div class="session-actions">
+                    <button class="delete-btn" data-id="${session.id}" title="删除此会话">
+                        <i class="material-icons">delete</i>
+                    </button>
+                </div>
+            `;
+            
+            // 添加删除事件
+            const deleteBtn = div.querySelector('.delete-btn');
+            deleteBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.deleteSession(session.id);
+            });
+            
+            return div;
+        }
+        
+        async createSession() {
+            if (!this.canCreateMore) {
+                this.showWarning('已达到最大对话表数量限制(5个)');
+                return;
+            }
+            
+            const name = prompt('请输入新对话表名称:', `会话 ${new Date().toLocaleString('zh-CN')}`);
+            if (!name || name.trim() === '') return;
+            
+            try {
+                const response = await fetch('/api/sessions', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ sessionName: name.trim() })
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.error || '创建失败');
+                }
+                
+                const newSession = await response.json();
+                this.sessions.unshift(newSession);
+                
+                if (this.sessions.length >= this.maxLimit) {
+                    this.canCreateMore = false;
+                }
+                
+                this.renderSessions();
+                this.updateUIState();
+                
+                // 自动选择新创建的会话
+                this.selectSession(newSession.id);
+                
+            } catch (error) {
+                console.error('创建会话失败:', error);
+                this.showError(error.message);
+            }
+        }
+        
+        async deleteSession(sessionId) {
+            if (!confirm('确定要删除此对话表吗？此操作不可恢复。')) return;
+            
+            try {
+                const response = await fetch(`/api/sessions/${sessionId}`, {
+                    method: 'DELETE'
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.error || '删除失败');
+                }
+                
+                this.sessions = this.sessions.filter(s => s.id !== sessionId);
+                this.canCreateMore = true;
+                
+                this.renderSessions();
+                this.updateUIState();
+                
+                // 如果删除的是当前会话，选择第一个会话
+                if (this.currentSession === sessionId) {
+                    this.selectSession(this.sessions[0]?.id || null);
+                }
+                
+            } catch (error) {
+                console.error('删除会话失败:', error);
+                this.showError(error.message);
+            }
+        }
+        
+        selectSession(sessionId) {
+            this.currentSession = sessionId;
+            
+            // 更新UI选择状态
+            document.querySelectorAll('.session-item').forEach(item => {
+                item.classList.remove('selected');
+            });
+            
+            const selectedItem = document.querySelector(`[data-id="${sessionId}"]`);
+            if (selectedItem) {
+                selectedItem.closest('.session-item').classList.add('selected');
+            }
+            
+            // 触发会话切换事件
+            this.onSessionChange(sessionId);
+        }
+        
+        updateUIState() {
+            // 更新添加按钮状态
+            this.addBtn.disabled = !this.canCreateMore;
+            this.addBtn.title = this.canCreateMore ? '添加新对话表' : '已达到最大数量限制';
+            
+            // 显示/隐藏警告
+            this.limitWarning.style.display = this.canCreateMore ? 'none' : 'block';
+        }
+        
+        bindEvents() {
+            this.addBtn.addEventListener('click', () => this.createSession());
+        }
+        
+        onSessionChange(sessionId) {
+            // 触发全局事件，让其他组件响应会话切换
+            window.dispatchEvent(new CustomEvent('sessionChanged', {
+                detail: { sessionId }
+            }));
+        }
+        
+        formatTime(isoString) {
+            const date = new Date(isoString);
+            return date.toLocaleString('zh-CN', {
+                month: 'short',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        }
+        
+        showError(message) {
+            alert(`错误: ${message}`);
+        }
+        
+        showWarning(message) {
+            alert(`警告: ${message}`);
+        }
+    }
+    
+    // 初始化SessionManager
+    window.sessionManager = new SessionManager();
+    
+    // 监听会话切换事件
+    window.addEventListener('sessionChanged', (e) => {
+        console.log('会话已切换到:', e.detail.sessionId);
+        // 这里可以触发历史记录重新加载等操作
+    });
+    
+    // 原有的DOMContentLoaded逻辑
     console.log("DOM 完全加载并解析。");
     document.querySelectorAll('.sidebar-section .sidebar-header, .sidebar-section-inner .sidebar-header-inner').forEach((header) => { 
         const content = header.nextElementSibling; const icon = header.querySelector('.material-icons');
         if (!header.classList.contains('collapsed')) header.classList.add("collapsed");
         if (content) content.style.display = "none";
         if (icon) icon.textContent = 'expand_more'; 
-    }
-);
+    });
     populateSelect(dim1Select, Object.keys(datasetHierarchy));
     clearSelect(dim2Select);
     clearSelect(dim3Select);
     updateDatasetSelection();
     applySettingsButton.disabled = true;
     ContinuegenetationButton.disabled = true;
-    await initializeHistory(); // 初始化历史记录区域 (根据 USE_BACKEND_HISTORY 决定行为)
     displaySelectedAnswer();
 });
 

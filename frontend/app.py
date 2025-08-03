@@ -454,16 +454,86 @@ def list_sessions():
         return jsonify([{"id": s.id, "name": s.session_name, "create_time": s.create_time.isoformat()+'Z'} for s in user_sessions])
     except Exception as e: return jsonify({"error": "获取会话列表时出错"}), 500
 
+@app.route('/api/sessions', methods=['GET'])
+@login_required
+def list_sessions():
+    """获取当前用户会话列表，包含表数量检查"""
+    user_id = session['user_id']
+    if not DB_INIT_SUCCESS: 
+        return jsonify({"error": "数据库服务不可用"}), 503
+    
+    try:
+        # 获取用户会话列表
+        user_sessions = ChatSession.query.filter_by(user_id=user_id).order_by(ChatSession.create_time.desc()).all()
+        
+        # 检查表数量
+        session_count = len(user_sessions)
+        can_create_more = session_count < 5
+        
+        return jsonify({
+            "sessions": [{"id": s.id, "name": s.session_name, "create_time": s.create_time.isoformat()+'Z'} for s in user_sessions],
+            "total": session_count,
+            "can_create_more": can_create_more,
+            "max_limit": 5
+        })
+    except Exception as e: 
+        return jsonify({"error": "获取会话列表时出错"}), 500
+
 @app.route('/api/sessions', methods=['POST'])
 @login_required
 def create_session_api():
-    """创建新会话"""
+    """创建新会话，包含表数量限制检查"""
     user_id = session['user_id']
-    if not request.is_json: return jsonify({"error": "请求必须是 JSON"}), 415
-    if not DB_INIT_SUCCESS: return jsonify({"error": "数据库服务不可用"}), 503
-    data = request.get_json(); session_name = data.get("sessionName", "").strip() or f"会话 {datetime.datetime.now().strftime('%Y-%m-%d %H:%M')}"
-    try: new_session = ChatSession(user_id=user_id, session_name=session_name); db.session.add(new_session); db.session.commit(); return jsonify({"id": new_session.id, "name": new_session.session_name, "create_time": new_session.create_time.isoformat()+'Z'}), 201
-    except Exception as e: db.session.rollback(); return jsonify({"error": "创建会话时发生内部错误"}), 500
+    if not request.is_json: 
+        return jsonify({"error": "请求必须是 JSON"}), 415
+    if not DB_INIT_SUCCESS: 
+        return jsonify({"error": "数据库服务不可用"}), 503
+    
+    data = request.get_json()
+    session_name = data.get("sessionName", "").strip() or f"会话 {datetime.datetime.now().strftime('%Y-%m-%d %H:%M')}"
+    
+    try:
+        # 检查用户会话数量
+        existing_count = ChatSession.query.filter_by(user_id=user_id).count()
+        if existing_count >= 5:
+            return jsonify({"error": "已达到最大对话表数量限制(5个)"}), 400
+        
+        new_session = ChatSession(user_id=user_id, session_name=session_name)
+        db.session.add(new_session)
+        db.session.commit()
+        
+        return jsonify({
+            "id": new_session.id, 
+            "name": new_session.session_name, 
+            "create_time": new_session.create_time.isoformat()+'Z'
+        }), 201
+    except Exception as e: 
+        db.session.rollback()
+        return jsonify({"error": "创建会话时发生内部错误"}), 500
+
+@app.route('/api/sessions/<int:session_id>', methods=['DELETE'])
+@login_required
+def delete_session_api(session_id):
+    """删除指定会话"""
+    user_id = session['user_id']
+    if not DB_INIT_SUCCESS: 
+        return jsonify({"error": "数据库服务不可用"}), 503
+    
+    try:
+        # 验证会话归属
+        chat_session = ChatSession.query.filter_by(id=session_id, user_id=user_id).first()
+        if not chat_session:
+            return jsonify({"error": "会话未找到或无权限"}), 404
+        
+        # 删除会话及其消息
+        ChatMessage.query.filter_by(session_id=session_id).delete()
+        db.session.delete(chat_session)
+        db.session.commit()
+        
+        return jsonify({"message": "会话删除成功"}), 200
+    except Exception as e: 
+        db.session.rollback()
+        return jsonify({"error": "删除会话时发生内部错误"}), 500
 
 @app.route('/api/sessions/<int:session_id>/history', methods=['GET'])
 @login_required
