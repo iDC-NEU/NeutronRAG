@@ -739,6 +739,150 @@ body {
     font-style: italic;
 }
 
+/* 历史表交互样式 */
+.history-tables-container {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 15px;
+}
+
+.history-table-list {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.history-table-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    background-color: #fff;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-size: 0.85em;
+}
+
+.history-table-item:hover {
+    background-color: #f0f8ff;
+    border-color: #8FC0DA;
+}
+
+.history-table-item.selected {
+    background-color: #8FC0DA;
+    color: white;
+    border-color: #7ab0d1;
+}
+
+.history-table-item.selected .table-name {
+    font-weight: bold;
+}
+
+.table-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.table-name {
+    font-weight: 500;
+    color: inherit;
+}
+
+.table-time {
+    font-size: 0.8em;
+    color: #666;
+}
+
+.history-table-item.selected .table-time {
+    color: rgba(255, 255, 255, 0.8);
+}
+
+.table-actions {
+    display: flex;
+    gap: 5px;
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.history-table-item:hover .table-actions,
+.history-table-item.selected .table-actions {
+    opacity: 1;
+}
+
+.delete-table-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 2px;
+    color: #ff6b6b;
+    transition: color 0.2s;
+}
+
+.history-table-item.selected .delete-table-btn {
+    color: rgba(255, 255, 255, 0.9);
+}
+
+.delete-table-btn:hover {
+    color: #ff3333;
+}
+
+.history-table-controls {
+    display: flex;
+    gap: 5px;
+    align-items: center;
+}
+
+.add-table-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 5px;
+    color: #8FC0DA;
+    transition: color 0.2s;
+}
+
+.add-table-btn:hover {
+    color: #7ab0d1;
+}
+
+.add-table-btn:disabled {
+    color: #ccc;
+    cursor: not-allowed;
+}
+
+.history-records-container {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.history-records-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    background-color: #f9f9f9;
+    border-bottom: 1px solid #eee;
+    margin-bottom: 10px;
+    font-size: 0.9em;
+    font-weight: bold;
+}
+
+.empty-session {
+    padding: 20px;
+    text-align: center;
+    color: #888;
+    font-style: italic;
+    background-color: #f9f9f9;
+    border-radius: 4px;
+}
+
 .more-info {
     display: flex;
     align-items: center;

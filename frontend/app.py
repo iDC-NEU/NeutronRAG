@@ -443,42 +443,6 @@ def api_check_auth():
     else: return jsonify({"logged_in": False}), 200
 
 # --- 历史记录 / 会话 API ---
-@app.route('/api/sessions', methods=['GET'])
-@login_required
-def list_sessions():
-    """获取当前用户会话列表"""
-    user_id = session['user_id']
-    if not DB_INIT_SUCCESS: return jsonify({"error": "数据库服务不可用"}), 503
-    try:
-        user_sessions = ChatSession.query.filter_by(user_id=user_id).order_by(ChatSession.create_time.desc()).all()
-        return jsonify([{"id": s.id, "name": s.session_name, "create_time": s.create_time.isoformat()+'Z'} for s in user_sessions])
-    except Exception as e: return jsonify({"error": "获取会话列表时出错"}), 500
-
-@app.route('/api/sessions', methods=['GET'])
-@login_required
-def list_sessions():
-    """获取当前用户会话列表，包含表数量检查"""
-    user_id = session['user_id']
-    if not DB_INIT_SUCCESS: 
-        return jsonify({"error": "数据库服务不可用"}), 503
-    
-    try:
-        # 获取用户会话列表
-        user_sessions = ChatSession.query.filter_by(user_id=user_id).order_by(ChatSession.create_time.desc()).all()
-        
-        # 检查表数量
-        session_count = len(user_sessions)
-        can_create_more = session_count < 5
-        
-        return jsonify({
-            "sessions": [{"id": s.id, "name": s.session_name, "create_time": s.create_time.isoformat()+'Z'} for s in user_sessions],
-            "total": session_count,
-            "can_create_more": can_create_more,
-            "max_limit": 5
-        })
-    except Exception as e: 
-        return jsonify({"error": "获取会话列表时出错"}), 500
-
 @app.route('/api/sessions', methods=['POST'])
 @login_required
 def create_session_api():
@@ -533,6 +497,42 @@ def delete_session_api(session_id):
         return jsonify({"message": "会话删除成功"}), 200
     except Exception as e: 
         db.session.rollback()
+        return jsonify({"error": "删除会话时发生内部错误"}), 500
+
+@app.route('/delete-history-session', methods=['DELETE'])
+@login_required
+def delete_history_session():
+    """删除指定历史会话（通过会话名称）"""
+    user_id = session['user_id']
+    data = request.get_json()
+    session_name = data.get('sessionName')
+    dataset_name = data.get('datasetName')
+    
+    if not session_name:
+        return jsonify({"error": "会话名称不能为空"}), 400
+    
+    if not DB_INIT_SUCCESS:
+        return jsonify({"error": "数据库服务不可用"}), 503
+    
+    try:
+        # 查找对应的会话
+        chat_session = ChatSession.query.filter_by(
+            name=session_name,
+            user_id=user_id
+        ).first()
+        
+        if not chat_session:
+            return jsonify({"error": "会话未找到或无权限"}), 404
+        
+        # 删除会话及其所有消息
+        ChatMessage.query.filter_by(session_id=chat_session.id).delete()
+        db.session.delete(chat_session)
+        db.session.commit()
+        
+        return jsonify({"message": f"会话 '{session_name}' 删除成功"}), 200
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"删除会话失败: {str(e)}")
         return jsonify({"error": "删除会话时发生内部错误"}), 500
 
 @app.route('/api/sessions/<int:session_id>/history', methods=['GET'])

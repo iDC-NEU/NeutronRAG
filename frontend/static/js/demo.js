@@ -1972,15 +1972,234 @@ ragSelect.addEventListener("change", displaySelectedAnswer);
 dim1Select.addEventListener('change', updateDatasetSelection);
 dim2Select.addEventListener('change', updateDatasetSelection);
 dim3Select.addEventListener('change', updateDatasetSelection);
-// historySessionSelect.addEventListener('change', (event) => {
-//     const selectedValue = event.target.value;
-//     if (USE_BACKEND_HISTORY) { currentSession = selectedValue; console.log("(API 模式) 会话已更改为 ID:", currentSession); }
-//     else { currentHistorySessionName = selectedValue; console.log("(本地模式) 会话已更改为名称:", currentHistorySessionName); }
-//     displaySessionHistory();
-// });
-newHistorySessionButton.addEventListener('click', showNewSessionInput);
-newSessionNameInput.addEventListener('keydown', (event) => { if (event.key === 'Enter') { event.preventDefault(); handleConfirmNewSession(); } else if (event.key === 'Escape') { hideNewSessionInput(); } });
-cancelNewSessionButton.addEventListener('click', hideNewSessionInput);
+
+// 新的历史表管理功能
+class HistoryTableManager {
+    constructor() {
+        this.historyTables = [];
+        this.currentTable = null;
+        this.maxTables = 10;
+        
+        this.addBtn = document.getElementById('add-history-table-btn');
+        this.tableList = document.getElementById('history-table-list');
+        this.currentTableName = document.getElementById('current-table-name');
+        this.deleteCurrentBtn = document.getElementById('delete-current-table-btn');
+        
+        this.init();
+    }
+    
+    async init() {
+        await this.loadHistoryTables();
+        this.bindEvents();
+    }
+    
+    async loadHistoryTables() {
+        try {
+            const response = await fetch('/get-history-tables');
+            if (!response.ok) throw new Error('获取历史表失败');
+            
+            const data = await response.json();
+            this.historyTables = data.history_tables || [];
+            this.renderTableList();
+            
+            // 默认选择第一个表
+            if (this.historyTables.length > 0 && !this.currentTable) {
+                this.selectTable(this.historyTables[0]);
+            }
+        } catch (error) {
+            console.error('加载历史表失败:', error);
+            this.showError('加载历史表失败，请刷新页面重试');
+        }
+    }
+    
+    renderTableList() {
+        this.tableList.innerHTML = '';
+        
+        if (this.historyTables.length === 0) {
+            this.tableList.innerHTML = '<div class="empty-session">暂无历史表，请添加新表</div>';
+            this.currentTableName.textContent = '请选择历史表';
+            this.deleteCurrentBtn.style.display = 'none';
+            return;
+        }
+        
+        this.historyTables.forEach(tableName => {
+            const tableItem = this.createTableItem(tableName);
+            this.tableList.appendChild(tableItem);
+        });
+    }
+    
+    createTableItem(tableName) {
+        const div = document.createElement('div');
+        div.className = 'history-table-item';
+        div.dataset.tableName = tableName;
+        
+        const now = new Date();
+        const timeStr = now.toLocaleString('zh-CN', {
+            month: 'short',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+        
+        div.innerHTML = `
+            <div class="table-info">
+                <div class="table-name">${tableName}</div>
+                <div class="table-time">${timeStr}</div>
+            </div>
+            <div class="table-actions">
+                <button class="delete-table-btn" title="删除此表">
+                    <i class="material-icons">delete_outline</i>
+                </button>
+            </div>
+        `;
+        
+        // 点击选择表
+        div.addEventListener('click', (e) => {
+            if (!e.target.closest('.delete-table-btn')) {
+                this.selectTable(tableName);
+            }
+        });
+        
+        // 删除表
+        const deleteBtn = div.querySelector('.delete-table-btn');
+        deleteBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.deleteTable(tableName);
+        });
+        
+        return div;
+    }
+    
+    async createTable() {
+        if (this.historyTables.length >= this.maxTables) {
+            this.showWarning(`已达到最大历史表数量限制(${this.maxTables}个)`);
+            return;
+        }
+        
+        const name = prompt('请输入新历史表名称:', `历史表_${new Date().toLocaleString('zh-CN')}`);
+        if (!name || name.trim() === '') return;
+        
+        try {
+            const response = await fetch('/create-history-session', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ 
+                    sessionName: name.trim(), 
+                    datasetName: selectedDatasetName 
+                })
+            });
+            
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.message || '创建失败');
+            }
+            
+            await this.loadHistoryTables();
+            
+            // 自动选择新创建的表
+            this.selectTable(name.trim());
+            
+        } catch (error) {
+            console.error('创建历史表失败:', error);
+            this.showError(error.message || '创建历史表失败');
+        }
+    }
+    
+    async deleteTable(tableName) {
+        if (!confirm(`确定要删除历史表 "${tableName}" 吗？此操作不可恢复。`)) return;
+        
+        try {
+            const response = await fetch('/delete-history-session', {
+                method: 'DELETE',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ 
+                    sessionName: tableName,
+                    datasetName: selectedDatasetName 
+                })
+            });
+            
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.message || '删除失败');
+            }
+            
+            await this.loadHistoryTables();
+            
+            // 如果删除的是当前表，选择第一个表
+            if (this.currentTable === tableName) {
+                if (this.historyTables.length > 0) {
+                    this.selectTable(this.historyTables[0]);
+                } else {
+                    this.currentTable = null;
+                    this.currentTableName.textContent = '请选择历史表';
+                    this.deleteCurrentBtn.style.display = 'none';
+                    document.getElementById('question-list').innerHTML = '请选择历史表查看记录';
+                }
+            }
+            
+        } catch (error) {
+            console.error('删除历史表失败:', error);
+            this.showError(error.message || '删除历史表失败');
+        }
+    }
+    
+    selectTable(tableName) {
+        this.currentTable = tableName;
+        
+        // 更新UI选择状态
+        document.querySelectorAll('.history-table-item').forEach(item => {
+            item.classList.remove('selected');
+        });
+        
+        const selectedItem = document.querySelector(`[data-table-name="${tableName}"]`);
+        if (selectedItem) {
+            selectedItem.classList.add('selected');
+        }
+        
+        // 更新当前表名显示
+        this.currentTableName.textContent = tableName;
+        this.deleteCurrentBtn.style.display = 'block';
+        
+        // 设置全局变量
+        currentSession = tableName;
+        currentHistorySessionName = tableName;
+        
+        // 加载该表的历史记录
+        displayHistoryFromDatabase(tableName);
+    }
+    
+    bindEvents() {
+        this.addBtn.addEventListener('click', () => this.createTable());
+        this.deleteCurrentBtn.addEventListener('click', () => {
+            if (this.currentTable) {
+                this.deleteTable(this.currentTable);
+            }
+        });
+    }
+    
+    showError(message) {
+        alert(`错误: ${message}`);
+    }
+    
+    showWarning(message) {
+        alert(`警告: ${message}`);
+    }
+}
+
+// 初始化新的历史表管理器
+let historyTableManager;
+
+// 在DOM加载完成后初始化
+document.addEventListener('DOMContentLoaded', function () {
+    historyTableManager = new HistoryTableManager();
+    
+    // 移除旧的事件监听
+    // 原有的newHistorySessionButton和historySessionSelect相关事件已被替换
+});
 
 
 // 登出logout操作
