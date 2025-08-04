@@ -1370,3 +1370,67 @@ body {
         display: block;
     }
 }
+
+.section-title {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.history-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px; /* 控件之间的间距 */
+    flex-grow: 1; /* 占据多余空间，将右侧图标推到最右边 */
+    margin-left: 20px;
+    margin-right: 20px;
+}
+
+.history-controls label {
+    font-weight: 500;
+    color: #333;
+    white-space: nowrap; /* 防止标签换行 */
+}
+
+.history-controls select {
+    max-width: 250px; /* 限制下拉菜单的最大宽度 */
+    border-radius: 5px;
+    border: 1px solid #ccc;
+    padding: 5px 8px;
+}
+
+.control-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.2s;
+}
+
+.control-btn:hover {
+    background-color: #e0e0e0;
+}
+
+.control-btn .material-icons {
+    font-size: 20px;
+    color: #555;
+}
+
+.history-records-header {
+    padding: 8px 15px;
+    background-color: #f8f8f8;
+    border-bottom: 1px solid #eee;
+    color: #555;
+    font-size: 0.9em;
+}
+
+.no-history-item {
+    text-align: center;
+    color: #888;
+    padding: 20px;
+    font-style: italic;
+}
