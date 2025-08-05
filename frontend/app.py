@@ -1,20 +1,30 @@
 import functools
 import json
 import os
+import random
 import re
 import sys
+import time
 import traceback
-from datetime import datetime
-from typing import Union
+import uuid
+from datetime import datetime, timezone
+
+from typing import Union, Optional
 
 from dotenv import load_dotenv
 from flask import Flask, request, jsonify, render_template, session, redirect, url_for, Response
+from flask_cors import CORS
+from flask_sqlalchemy import SQLAlchemy
+from watchdog.events import FileSystemEventHandler
+from watchdog.observers import Observer
 from werkzeug.security import generate_password_hash, check_password_hash
+from zhipuai import ZhipuAI
 
-# --- 数据库与模型导入 ---
+#from config.config import Config
 from db_setup import db
-from models import User # SQLAlchemy 模型主要用于用户认证
-from database.mysql.mysql import MySQLManager # 自定义MySQL管理器用于历史记录表
+from models import User, ChatSession, ChatMessage
+from database.mysql.mysql import MySQLManager
+#from user import User
 
 # --- RAG 核心逻辑导入 ---
 RAG_CORE_LOADED = False
