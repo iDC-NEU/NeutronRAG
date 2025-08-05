@@ -2,7 +2,7 @@
 Author: lpz 1565561624@qq.com
 Date: 2025-03-19 20:28:13
 LastEditors: lpz 1565561624@qq.com
-LastEditTime: 2025-07-30 16:32:49
+LastEditTime: 2025-08-05 21:31:23
 FilePath: /lipz/NeutronRAG/NeutronRAG/backend/llmragenv/demo_chat.py
 Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
 '''
@@ -18,6 +18,7 @@ from evaluator.evaluator import*
 from llmragenv.LLM.llm_factory import ClientFactory
 from database.graph.graph_dbfactory import GraphDBFactory
 from llmragenv.Cons_Retri.KG_Construction import KGConstruction
+from database.mysql.mysql import MySQLManager
 
 from dataset.dataset import Dataset
 from logger import Logger
@@ -300,7 +301,10 @@ class Demo_chat:
                  strategy="Union",
                  api_key="ollama",
                  url="http://localhost:11434/v1",
-                 path_name="untitled"):
+                 path_name="untitled",
+                 user_name = "default",
+                 user_id = "1"
+                 ):
 
         """
         初始化 Demo_chat 类。
@@ -357,6 +361,9 @@ class Demo_chat:
         print(path_name)
         
         self.evaluator = Evaluator(data_name=dataset_name,mode=strategy)
+        self.mysql = MySQLManager()
+        self.user_name = user_name
+        self.user_id = user_id
 
 
     @classmethod
@@ -623,7 +630,7 @@ class Demo_chat:
 
         
         print("dataset_path:",self.dataset_path)
-        data = data[offset:8]
+        data = data[offset:20]
 
         # 用于计算评估平均值
         total_queries = 0
@@ -784,15 +791,17 @@ class Demo_chat:
                 "h_error": h_error
             }
 
-            with open(self.path_name, 'a') as f: 
-                json.dump(item_data, f, separators=(',', ':'))  # 使用 ',' 和 ':' 分隔符
-                f.write('\n')  # 每个元素占一行
-                print(f"Results successfully saved to {self.path_name}")
+            
+
+            # with open(self.path_name, 'a') as f: 
+            #     json.dump(item_data, f, separators=(',', ':'))  # 使用 ',' 和 ':' 分隔符
+            #     f.write('\n')  # 每个元素占一行
+            #     print(f"Results successfully saved to {self.path_name}")
             
             # 流式返回
             yield item_data
 
-        # yield {"status": "complete", "message": "所有项目处理完成"}
+        yield {"status": "complete", "message": "所有项目处理完成"}
 
         
 

@@ -1,8 +1,8 @@
 '''
 Author: fzb0316 fzb0316@163.com
 Date: 2024-09-21 19:23:18
-LastEditors: fzb0316 fzb0316@163.com
-LastEditTime: 2024-10-21 19:21:16
+LastEditors: lpz 1565561624@qq.com
+LastEditTime: 2025-08-05 19:23:05
 FilePath: /BigModel/RAGWebUi_demo/llmragenv/Cons_Retri/retriever_vector.py
 Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
 '''
@@ -56,7 +56,7 @@ class RetrieverVector(object):
 
     def retrieve(self,question):
         retrieval_result = []
-        embedding = self.vector_database.embed_model.get_text_embedding(question)
+        embedding = self.vector_database.embed_model.get_embedding(question)
         nodes = self.vector_database.retrieve_nodes(question,embedding)
         for node in nodes:
             retrieval_result.append(node.text)

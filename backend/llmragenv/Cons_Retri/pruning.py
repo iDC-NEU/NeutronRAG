@@ -7,7 +7,7 @@ from llama_index.core.utils import print_text
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
-from llmragenv.Cons_Retri.Embedding_Model import EmbeddingEnv
+from llmragenv.Cons_Retri.Embedding_Model import EmbeddingEnv, Ollama_EmbeddingEnv
 
 # embed_model = HuggingFaceEmbedding(model_name="BAAI/bge-small-en-v1.5",
 #                                    embed_batch_size=10)
@@ -28,9 +28,7 @@ class Pruning:
         if embed_model is not None:
             self.embed_model = embed_model
         else:
-            self.embed_model = EmbeddingEnv(
-                embed_name=model, embed_batch_size=batch_size, device=device
-            )
+            self.embed_model = Ollama_EmbeddingEnv()
 
     def get_text_embedding(self, text):
         embedding = self.embed_model.get_embedding(text)
@@ -113,9 +111,7 @@ def calculate_tfidf_cosine_similarity(sentence1, sentence2):
 def calculate_embedding_cosine_similarity(sentence1, sentence2):
     global embed_model
     if not embed_model:
-        embed_model = EmbeddingEnv(
-            embed_name="BAAI/bge-small-en-v1.5", embed_batch_size=10
-        )
+        embed_model = Ollama_EmbeddingEnv()
         print_text("pruning create embed_model\n", color="red")
     embed1 = np.array(embed_model.get_text_embedding(sentence1)).reshape(1, -1)
     embed2 = np.array(embed_model.get_text_embedding(sentence2)).reshape(1, -1)
@@ -126,9 +122,7 @@ def calculate_embedding_cosine_similarity(sentence1, sentence2):
 def get_text_embedding(text):
     global embed_model
     if not embed_model:
-        embed_model = EmbeddingEnv(
-            embed_name="BAAI/bge-small-en-v1.5", embed_batch_size=10
-        )
+        embed_model = Ollama_EmbeddingEnv()
         print_text("create embed_model\n", color="red")
     # embedding = embed_model._get_text_embedding(text)
     embedding = embed_model.get_embedding(text)
@@ -138,11 +132,7 @@ def get_text_embedding(text):
 def get_text_embeddings(texts, step=400, device=0):
     global embed_model
     if not embed_model:
-        embed_model = EmbeddingEnv(
-            embed_name="BAAI/bge-small-en-v1.5",
-            embed_batch_size=step,
-            device=f"cuda:{device}",
-        )
+        embed_model = Ollama_EmbeddingEnv()
         print_text("create embed_model\n", color="red")
 
     all_embeddings = []

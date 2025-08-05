@@ -2,7 +2,7 @@
 Author: lpz 1565561624@qq.com
 Date: 2025-07-30 19:26:29
 LastEditors: lpz 1565561624@qq.com
-LastEditTime: 2025-07-31 21:02:35
+LastEditTime: 2025-08-05 21:11:47
 FilePath: /lipz/NeutronRAG/NeutronRAG/backend/database/mysql/mysql.py
 Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
 '''
@@ -10,6 +10,22 @@ import json
 import pymysql
 import re
 
+def flatten_to_str(value):
+    if isinstance(value, list):
+        # 展平嵌套列表为一维
+        flat = []
+
+        def _flatten(x):
+            for i in x:
+                if isinstance(i, list):
+                    _flatten(i)
+                else:
+                    flat.append(i)
+
+        _flatten(value)
+        return str(flat)
+    else:
+        return str(value)  # 非列表也转为字符串
 
 ####history schema###   用于创建用户的历史测评记录表
 HISTORY_TABLE_SCHEMA_TEMPLATE = """
@@ -52,7 +68,7 @@ CREATE TABLE IF NOT EXISTS `user_info` (
 """
 
 class MySQLManager:
-    def __init__(self, host="127.0.0.1", port=3307, user="root", password="a123456", database="your_database"):
+    def __init__(self, host="127.0.0.1", port=3307, user="root", password="a123456", database="chat"):
         self.conn = pymysql.connect(
             host=host,
             port=port,
@@ -69,7 +85,7 @@ class MySQLManager:
         self.conn.close()
 
     def is_valid_table_name(self, table_name):
-        return re.match(r'^[A-Za-z0-9_]+$', table_name) is not None
+        return re.match(r'^[A-Za-z0-9_-]+$', table_name) is not None
 
     def create_user_table(self, user_id, table_name):
         if not self.is_valid_table_name(table_name):
@@ -465,7 +481,77 @@ class MySQLManager:
             print(f"🎉 表 `{table_name}` 所有指定列已更新为 TEXT")
         except Exception as e:
             print(f"❌ 修改表 `{table_name}` 时出错: {e}")
+    
+    def insert_record_to_history_table(self, user_id, table_suffix, record):
+        """
+        将一条记录插入指定用户的历史记录表中。
+        表名格式: user{user_id}_history_{table_suffix}
+        """
+        if not self.is_valid_table_name(table_suffix):
+            raise ValueError("非法表名，仅支持字母、数字、下划线")
 
+        table_name = f"user{user_id}_history_{table_suffix}"
+
+        insert_sql = f"""
+        INSERT INTO `{table_name}` (
+            id, query, answer, type,
+            vector_response, graph_response, hybrid_response,
+            vector_retrieval_result, graph_retrieval_result,
+            vector_evaluation, graph_evaluation, hybrid_evaluation,
+            avg_vector_evaluation, avg_graph_evaluation, avg_hybrid_evaluation,
+            v_error, g_error, h_error
+        ) VALUES (
+            %(id)s, %(query)s, %(answer)s, %(type)s,
+            %(vector_response)s, %(graph_response)s, %(hybrid_response)s,
+            %(vector_retrieval_result)s, %(graph_retrieval_result)s,
+            %(vector_evaluation)s, %(graph_evaluation)s, %(hybrid_evaluation)s,
+            %(avg_vector_evaluation)s, %(avg_graph_evaluation)s, %(avg_hybrid_evaluation)s,
+            %(v_error)s, %(g_error)s, %(h_error)s
+        )
+        """
+
+        # 将非字符串类型字段（如 dict/list）转为 JSON 字符串
+        def safe_json(value):
+            if isinstance(value, (dict, list)):
+                return json.dumps(value, ensure_ascii=False)
+            return value
+
+        # 构建参数字典
+        params = {
+            "id": record.get("id"),
+            "query": record.get("query"),
+            "answer": flatten_to_str(record.get("answer")),
+            "type": record.get("type"),
+
+            "vector_response": record.get("vector_response"),
+            "graph_response": record.get("graph_response"),
+            "hybrid_response": record.get("hybrid_response"),
+
+            "vector_retrieval_result": safe_json(record.get("vector_retrieval_result")),
+            "graph_retrieval_result": safe_json(record.get("graph_retrieval_result")),
+
+            "vector_evaluation": safe_json(record.get("vector_evaluation")),
+            "graph_evaluation": safe_json(record.get("graph_evaluation")),
+            "hybrid_evaluation": safe_json(record.get("hybrid_evaluation")),
+
+            "avg_vector_evaluation": safe_json(record.get("avg_vector_evaluation")),
+            "avg_graph_evaluation": safe_json(record.get("avg_graph_evaluation")),
+            "avg_hybrid_evaluation": safe_json(record.get("avg_hybrid_evaluation")),
+
+            "v_error": record.get("v_error"),
+            "g_error": record.get("g_error"),
+            "h_error": record.get("h_error"),
+        }
+
+        try:
+            self.cursor.execute(insert_sql, params)
+            self.conn.commit()
+            print(f"✅ 成功插入记录到 `{table_name}`")
+        except Exception as e:
+            self.conn.rollback()
+            print(f"❌ 插入记录失败: {str(e)}")
+            raise
+        
 
 
     def load_history_from_jsonl(self, jsonl_path, user_id, suffix):

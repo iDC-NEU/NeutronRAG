@@ -76,7 +76,8 @@ from llama_index.core.retrievers import (
 
     # KnowledgeGraphRAGRetriever,
     VectorIndexRetriever)
-from llama_index.embeddings.huggingface import HuggingFaceEmbedding
+# from llama_index.embeddings.huggingface import HuggingFaceEmbedding
+from llmragenv.Cons_Retri.Embedding_Model import Ollama_EmbeddingEnv 
 fmt = "\n=== {:30} ===\n"
 
 
@@ -85,7 +86,7 @@ class MilvusClientTool:
 
     def __init__(
         self,
-        server_ip='202.199.13.67',
+        server_ip='127.0.0.1',
         server_port='19530',
     ):
         self.client = Milvus(server_ip, server_port)
@@ -151,7 +152,7 @@ class MilvusDB(VectorDatabase):
                  server_port='19530',
                  log_file='./database/milvus.log',
                  store=False,
-                 verbose=False,
+                 verbose=True,
                  metric='COSINE',
                  retriever=False):
         self.collection_name = collection_name
@@ -174,10 +175,7 @@ class MilvusDB(VectorDatabase):
         self.retriever = None
         self.topk = similarity_top_k
 
-        self.embed_model = HuggingFaceEmbedding(
-                model_name="BAAI/bge-large-en-v1.5",
-                embed_batch_size=20,
-                device="cuda:0")
+        self.embed_model = Ollama_EmbeddingEnv()
 
 
         connections.connect("default", host="localhost", port=server_port)
@@ -374,7 +372,6 @@ class MilvusDB(VectorDatabase):
 
     
 def test_retrieve_nodes(db_name):
-    from llmragenv.Cons_Retri.Embedding_Model import  EmbeddingEnv
 
     vector_db = MilvusDB(db_name, 1024, overwrite=False, store=True,retriever=True)
     vector_db.show_collections_stats()
@@ -382,9 +379,9 @@ def test_retrieve_nodes(db_name):
     collection.load()
     # print(collection.is_loaded)
 
-    question = "Tell me about Lebron James?"
+    question = "Who won the 2022 Tour de France?"
 
-    embed_model = EmbeddingEnv(embed_name="BAAI/bge-large-en-v1.5")
+    embed_model = Ollama_EmbeddingEnv()
     embedding = embed_model.get_embedding(question)
 
     # vector_index = vector_db.get_vector_index()
@@ -393,13 +390,14 @@ def test_retrieve_nodes(db_name):
 
     nodes = vector_db.retrieve_nodes(question, embedding)
 
-    # print(f'nodes:\n{nodes}')
-    # for node in nodes:
-    #     print_text(f'{node.text}\n', color='yellow')
+    print(f'nodes:\n{nodes}')
+    for node in nodes:
+        print_text(f'{node.text}\n', color='yellow')
     
 
 
 if __name__ == "__main__":
+    test_retrieve_nodes("rgb")
     
     # import time
     # start = time.perf_counter()
@@ -414,7 +412,7 @@ if __name__ == "__main__":
     # query_vector = [0.1] * 1024  
 
     # # 调用 get_topk_chunk 方法进行检索
-    # topk_results = vector_db.get_topk_vector(query_vector)
+    # topk_results = vector_db.retrieve_nodes("how are you",query_vector)
     # end = time.perf_counter()
     # print(f"执行时间: {end - start:.4f} 秒")
 
@@ -433,29 +431,29 @@ if __name__ == "__main__":
     # end = time.perf_counter()
 
     # print(f"执行时间: {end - start:.4f} 秒")
-    import torch
-    from transformers import AutoTokenizer, AutoModelForCausalLM
-    import time
+    # import torch
+    # from transformers import AutoTokenizer, AutoModelForCausalLM
+    # import time
 
-    model_path = "/home/hdd/model/Llama-2-13b-chat-hf"
-    tokenizer = AutoTokenizer.from_pretrained(model_path)
-    model = AutoModelForCausalLM.from_pretrained(
-    model_path
-    ).to("cuda")
+    # model_path = "/home/hdd/model/Llama-2-13b-chat-hf"
+    # tokenizer = AutoTokenizer.from_pretrained(model_path)
+    # model = AutoModelForCausalLM.from_pretrained(
+    # model_path
+    # ).to("cuda")
 
-    input_text = "介绍一下人工智能的历史和发展。"  # 示例输入
+    # input_text = "介绍一下人工智能的历史和发展。"  # 示例输入
 
-    # Tokenize 输入
-    input_ids = tokenizer.encode(input_text, return_tensors="pt").to("cuda")
-    start_time = time.time()
+    # # Tokenize 输入
+    # input_ids = tokenizer.encode(input_text, return_tensors="pt").to("cuda")
+    # start_time = time.time()
 
-    # 生成 2500 token（max_new_tokens=2500）
-    output = model.generate(
-        input_ids,
-        max_new_tokens=2500,  # 控制生成 token 数量
-        do_sample=True,       # 启用随机采样
-        temperature=0.7,      # 控制随机性
-        top_p=0.9,            # Nucleus sampling
-    )
+    # # 生成 2500 token（max_new_tokens=2500）
+    # output = model.generate(
+    #     input_ids,
+    #     max_new_tokens=2500,  # 控制生成 token 数量
+    #     do_sample=True,       # 启用随机采样
+    #     temperature=0.7,      # 控制随机性
+    #     top_p=0.9,            # Nucleus sampling
+    # )
 
-    end_time = time.time()
+    # end_time = time.time()
