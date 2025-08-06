@@ -19,6 +19,19 @@ const historySessionSelect = document.getElementById('history-session-select');
 const addHistorySessionButton = document.getElementById('add-session-btn');
 const deleteCurrentSessionButton = document.getElementById('delete-session-btn');
 const refreshSessionsButton = document.getElementById('refresh-sessions-btn');
+const loadingHTML = `
+    <div id="loading-indicator" style="text-align: center; margin: 10px;">
+        <div class="spinner"></div>
+        <div>正在处理中，请稍候...</div>
+    </div>
+`;
+function showLoading() {
+    currentAnswerContent.innerHTML = loadingHTML;
+}
+function hideLoading() {
+    const loading = document.getElementById('loading-indicator');
+    if (loading) loading.style.display = 'none';
+}
 
 let isGenerating = false;
 let abortController = new AbortController();
@@ -39,6 +52,10 @@ let radarChart3 = null;
 let current_radar1 = [0.1,0.1,0.1,0.1,0.1];
 let historySessions = {};
 let currentHistorySessionName; // 恢复旧变量以兼容旧函数
+
+
+// 控制当前页面状态 （按钮的可用）
+let current_state = "IDLE"
 
 // --- 数据集层级结构 ---
 const datasetHierarchy = {
@@ -610,112 +627,9 @@ async function deleteCurrentHistorySession() {
     }
 }
 
-// async function initializeHistory() {
-//     if (USE_BACKEND_HISTORY) {
-//         console.log("从后端初始化历史记录...");
-//         await populateSessionDropdown();
-//         await displaySessionHistory();
-//     } else {
-//         console.log("从本地模拟数据初始化历史记录...");
-//         populateSessionDropdown();
-//         displaySessionHistory();
-//     }
-// }
-
-// async function updateSessionsList() {
-//     try {
-//         const response = await fetch('/list-history', {
-//             method: 'POST',
-//             headers: { 'Content-Type': 'application/json' },
-//             body: JSON.stringify({ selectedDatasetName: selectedDatasetName })
-//         });
-//         const data = await response.json();
-//         sessionsList = data.files || [];
-//         console.log("✅ sessionsList 已更新:", sessionsList);
-//         if (sessionsList.length === 0) { alert("未找到历史记录文件"); }
-//     } catch (error) {
-//         console.error("❌ 获取 sessionsList 失败:", error);
-//         alert("无法获取历史记录，请检查网络或服务器状态");
-//     }
-// }
-
-// async function populateSessionDropdown() {
-//     historySessionSelect.innerHTML = '';
-//     if (USE_BACKEND_HISTORY) {
-//         if (sessionsList.length === 0) { historySessionSelect.innerHTML = '<option value="">无可用会话</option>'; return; }
-//         sessionsList.forEach(session => {
-//             const option = document.createElement('option');
-//             option.value = session; option.textContent = session; historySessionSelect.appendChild(option);
-//         });
-//         if (currentSession && sessionsList.includes(currentSession)) {
-//             historySessionSelect.value = currentSession;
-//         } else if (sessionsList.length > 0) {
-//             currentSession = sessionsList[0];
-//             historySessionSelect.value = currentSession;
-//         } else {
-//             currentSession = null;
-//         }
-//     } else {
-//         const sessionNames = Object.keys(historySessions);
-//         if (sessionNames.length === 0) { historySessionSelect.innerHTML = '<option value="">无可用会话</option>'; return; }
-//         sessionNames.forEach(name => {
-//             const option = document.createElement('option');
-//             option.value = name; option.textContent = name; historySessionSelect.appendChild(option);
-//         });
-//         if (!historySessions.hasOwnProperty(currentHistorySessionName) && sessionNames.length > 0) { currentHistorySessionName = sessionNames[0]; }
-//         else if (sessionNames.length === 0) { currentHistorySessionName = null; }
-//         if (currentHistorySessionName) { historySessionSelect.value = currentHistorySessionName; }
-//     }
-// }
-
-// async function displaySessionHistory() {
-//     // ... (旧的显示历史记录的函数)
-// }
-
-// async function handleConfirmNewSession() {
-//     const name = newSessionNameInput.value.trim();
-//     if (name === "") {
-//         console.warn("会话名称不能为空。");
-//         newSessionNameInput.focus();
-//         return;
-//     }
-//     hideNewSessionInput();
-//     try {
-//         const response = await fetch('/create-history-session', {
-//             method: 'POST',
-//             headers: { 'Content-Type': 'application/json' },
-//             body: JSON.stringify({
-//                 sessionName: name,
-//                 datasetName: selectedDatasetName
-//             })
-//         });
-//         if (!response.ok) throw new Error(`创建失败: ${response.status}`);
-//         const createdSession = await response.json();
-//         console.log("新会话已创建:", createdSession);
-//         await updateSessionsList();
-//         await populateSessionDropdown();
-//         await displaySessionHistory();
-//     } catch (error) {
-//         console.error("创建新会话时出错:", error);
-//         alert(`通过 API 创建会话失败: ${error.message}`);
-//     }
-// }
-
-// function showNewSessionInput() {
-//     newHistorySessionButton.style.display = 'none';
-//     newSessionInputContainer.style.display = 'inline-flex';
-//     newSessionNameInput.value = '';
-//     newSessionNameInput.focus();
-// }
-// function hideNewSessionInput() {
-//     newSessionInputContainer.style.display = 'none';
-//     newHistorySessionButton.style.display = 'inline-block';
-// }
-/* --- [注释结束] --- */
-
-
 // --- 核心交互逻辑 ---
 applySettingsButton.addEventListener("click", async () => {
+    
     if (!selectedDatasetName) { 
         alert("请在选择所有维度后，从列表中选择一个数据集。"); 
         return; 
@@ -737,9 +651,14 @@ applySettingsButton.addEventListener("click", async () => {
         dataset: selectedDatasetName,
         session: currentSession
     };
+    if (current_state !== "IDLE") {
+        alert("⚠️ 当前正在生成中，请稍候完成后再尝试！");
+        return;
+    }
+
 
     applySettingsButton.disabled = true; 
-    applySettingsButton.textContent = "应用中..."; 
+    applySettingsButton.textContent = "Processing..."; 
     adviceContent.innerHTML = "正在加载建议...";
     StopButton.disabled = false;
     ContinuegenetationButton.disabled = true;
@@ -761,6 +680,8 @@ applySettingsButton.addEventListener("click", async () => {
     };
     
     console.log("正在应用设置:", settingsData);
+    current_state = "PROCESSING"
+    showLoading();
     
     try {
         historySessions[currentSession] = []; 
@@ -921,7 +842,7 @@ applySettingsButton.addEventListener("click", async () => {
                                 </ul>
                             </div>
                             `;
-                            await fetchAndDisplaySuggestions();
+//                             await fetchAndDisplaySuggestions();
                             applySettingsButton.innerText = "Apply Settings"
                             StopButton.disabled = true
                             break;
@@ -946,6 +867,9 @@ applySettingsButton.addEventListener("click", async () => {
         ContinuegenetationButton.disabled = false; 
         StopButton.disabled = true; 
         ContinuegenetationButton.textContent = "Continue Generation"; 
+        current_state = "IDLE"
+        hideLoading();
+        applySettingsButton.textContent = "applySettings";
     }
 });
 
@@ -1458,6 +1382,11 @@ refreshSessionsButton.addEventListener('click', () => {
 
 
 sendButton.addEventListener('click', async function () {
+    if (current_state !== "IDLE") {
+        alert("⚠️ 当前正在生成中，请稍候完成后再尝试！");
+        return;
+    }
+
     if (!selectedDatasetName) { 
         alert("请在选择所有维度后，从列表中选择一个数据集。"); 
         return; 
@@ -1487,6 +1416,9 @@ sendButton.addEventListener('click', async function () {
         alert("请输入问题！");
         return;
     }
+
+    current_state = "PROCESSING"
+    showLoading();
 
     // 构造完整 ask 请求数据
     const askData = {
@@ -1531,11 +1463,13 @@ sendButton.addEventListener('click', async function () {
             answerContentDiv.innerHTML = `<span style="color:red;">⚠️ 没有返回有效数据</span>`;
         }
 
-        // 刷新历史
-        await displayHistoryEntries(historySessionSelect);
         
     } catch (error) {
         console.error('请求失败:', error);
         answerContentDiv.innerHTML = `<span style="color:red;">❌ 请求失败，请检查控制台</span>`;
+    }finally {
+        await displayHistoryEntries(historySessionSelect);
+        current_state = "IDLE";  // 不管成功失败，最终设置为空闲状态
+        hideLoading();
     }
 });

@@ -548,7 +548,7 @@ def load_model_multi():
                 print(item_data)
                 mysql.insert_record_to_history_table(user_id=user_id,table_suffix=table_suffix,record=item_data)
                 yield json.dumps({"status": "processing", "item_data": item_data}) + "\n"
-            # yield json.dumps({"status": "complete", "message": "所有项目处理完成"}) + "\n"
+            yield json.dumps({"status": "complete", "message": "所有项目处理完成"}) + "\n"
 
        
 

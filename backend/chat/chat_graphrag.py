@@ -2,7 +2,7 @@
 Author: fzb fzb0316@163.com
 Date: 2024-09-19 08:48:47
 LastEditors: lpz 1565561624@qq.com
-LastEditTime: 2025-08-06 16:29:16
+LastEditTime: 2025-08-06 19:43:24
 FilePath: /RAGWebUi_demo/chat/chat_graphrag.py
 Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
 '''
@@ -83,7 +83,7 @@ class ChatGraphRAG(ChatBase):
         self.retriever_entites = RetrieverEntities(graph_db,entities_db)
 
     
-    def retrieve_triplets(self, message, retrieval_function = "embedding"):
+    def retrieve_triplets(self, message, retrieval_function = "llm"):
         # 里面的graph_database是有 space的
         """
         更新，为了多用户并发，减少llm提实体所占时间，这里改成 通过embedding去检索实体，

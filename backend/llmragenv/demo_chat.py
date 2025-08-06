@@ -2,7 +2,7 @@
 Author: lpz 1565561624@qq.com
 Date: 2025-03-19 20:28:13
 LastEditors: lpz 1565561624@qq.com
-LastEditTime: 2025-08-06 18:14:35
+LastEditTime: 2025-08-06 20:16:45
 FilePath: /lipz/NeutronRAG/NeutronRAG/backend/llmragenv/demo_chat.py
 Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
 '''
@@ -633,7 +633,7 @@ class Demo_chat:
 
         
         print("dataset_path:",self.dataset_path)
-        data = data[offset:20]
+        data = data[offset:3]
 
         # 用于计算评估平均值
         total_queries = 0
@@ -803,8 +803,6 @@ class Demo_chat:
             
             # 流式返回
             yield item_data
-
-        yield {"status": "complete", "message": "所有项目处理完成"}
 
         
 
