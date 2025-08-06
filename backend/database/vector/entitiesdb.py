@@ -2,14 +2,15 @@
 Author: lpz 1565561624@qq.com
 Date: 2025-08-03 08:09:32
 LastEditors: lpz 1565561624@qq.com
-LastEditTime: 2025-08-05 19:38:48
+LastEditTime: 2025-08-06 09:21:47
 FilePath: /lipz/NeutronRAG/NeutronRAG/backend/database/vector/entitiesdb.py
 Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
 '''
 from tqdm import tqdm
 
 from database.vector.Milvus.milvus import MilvusDB, myMilvus
-from llmragenv.Cons_Retri.Embedding_Model import Ollama_EmbeddingEnv
+from database.graph.nebulagraph.nebulagraph import *
+from llmragenv.Cons_Retri.Embedding_Model import Ollama_EmbeddingEnv,EmbeddingEnv
 
 
 class EntitiesDB:
@@ -24,7 +25,7 @@ class EntitiesDB:
         device="cuda:2",
         verbose=False,
     ):
-        self.embed_model = Ollama_EmbeddingEnv(embed_name=embed_name, device=device)
+        self.embed_model = Ollama_EmbeddingEnv()
 
         self.entities = sorted(list(entities))
         self.db_name = f"{db_name}_entities"
@@ -49,8 +50,7 @@ class EntitiesDB:
             create_new_db = False
             print(f"{self.db_name} is existing!")
 
-        # overwrite = overwrite or create_new_db
-        overwrite = False
+        overwrite = overwrite or create_new_db
 
         if overwrite:
             assert (
@@ -106,4 +106,5 @@ class EntitiesDB:
         self.db.insert([id, query_embedding])
 
 if __name__ == "__main__":
-    db = EntitiesDB()
+    graph = NebulaDB()
+    db = EntitiesDB(entities=graph.entities)

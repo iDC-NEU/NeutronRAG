@@ -2,7 +2,7 @@
 Author: lpz 1565561624@qq.com
 Date: 2025-07-30 19:26:29
 LastEditors: lpz 1565561624@qq.com
-LastEditTime: 2025-08-05 21:11:47
+LastEditTime: 2025-08-06 09:54:42
 FilePath: /lipz/NeutronRAG/NeutronRAG/backend/database/mysql/mysql.py
 Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
 '''
@@ -617,4 +617,4 @@ if __name__ == "__main__":
     # db.del_history_table(user_id="10",table_suffix="rgb")
     # db.print_table_contents("user10_history_rgb")
     # db.load_history_from_jsonl(jsonl_path=jsonl_path,user_id="10",suffix="rgb")
-    db.print_table_contents("user10_history_rgb")
+    db.print_table_contents("user11_history_new2")
