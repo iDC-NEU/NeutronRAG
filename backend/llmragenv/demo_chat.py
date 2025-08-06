@@ -2,10 +2,11 @@
 Author: lpz 1565561624@qq.com
 Date: 2025-03-19 20:28:13
 LastEditors: lpz 1565561624@qq.com
-LastEditTime: 2025-08-05 21:31:23
+LastEditTime: 2025-08-06 18:14:35
 FilePath: /lipz/NeutronRAG/NeutronRAG/backend/llmragenv/demo_chat.py
 Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
 '''
+from datetime import datetime
 from typing import List, Optional
 
 from chat.chat_base import ChatBase
@@ -365,6 +366,8 @@ class Demo_chat:
         self.user_name = user_name
         self.user_id = user_id
 
+    def __del__(self):
+        print(f"🧹 Demo_chat 实例被销毁: {self.model_name}")
 
     @classmethod
     def from_request(cls, request:Request):
@@ -948,6 +951,44 @@ class Demo_chat:
             return "NO"
 
 
+    def user_query(self,query:str,user_id):
+        response_type = None
+        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+        query_id = f"{user_id}_{timestamp}"
+
+        print("##########Query_id############",query_id)
+        # evidence_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "evaluator", "rgb_evidence_test.json")
+        response_vector = self.chat_vector.web_chat(message=query, history=None)
+        response_graph = self.chat_graph.web_chat(message=query, history=None)
+        response_hybrid = self.hybrid_chat(message=query)
+        vector_retrieval_result = self.chat_vector.retrieval_result()
+        graph_retrieval_result = self.chat_graph.retrieval_result()
+
+        item_data = {
+            "id": query_id,
+            "query": query,
+            "answer": "",
+            "type": response_type,
+            "vector_response": response_vector,
+            "graph_response": response_graph,
+            "hybrid_response": response_hybrid,
+            "vector_retrieval_result": vector_retrieval_result,
+            "graph_retrieval_result": graph_retrieval_result,
+            "vector_evaluation": "",
+            "graph_evaluation": "",
+            "hybrid_evaluation": "",
+            "avg_vector_evaluation": None,  # 实时调用不计算平均值
+            "avg_graph_evaluation": None,
+            "avg_hybrid_evaluation": None,
+            "v_error": "",
+            "g_error": "",
+            "h_error": ""
+        }
+
+
+
+        return item_data
+
 # 将set类型转换成list
 def convert_sets(obj):
     if isinstance(obj, set):
@@ -974,6 +1015,8 @@ def test_history_chat():
         chat.history_chat(query_id=query_id, query=query, is_continue=True)
 
     chat.close()
+
+
 
 
 

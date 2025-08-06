@@ -339,205 +339,6 @@ def sse_pack(data_dict: dict) -> str:
     """将字典格式化为 Server-Sent Event (SSE) data 字段"""
     return f"data: {json.dumps(data_dict)}\n\n"
 
-# @app.route('/generate', methods=['POST'])
-# @login_required
-# def generate_answers():
-#     global current_model
-    
-#     if not RAG_CORE_LOADED or current_model is None:
-#         return Response(sse_pack({"type": "error", "message": "模型未加载或当前不可用"}), mimetype='text/event-stream', status=501)
-#     if not request.is_json:
-#         return Response(sse_pack({"type": "error", "message": "请求必须是 JSON 格式"}), mimetype='text/event-stream', status=415)
-#     if not DB_INIT_SUCCESS:
-#         return Response(sse_pack({"type": "error", "message": "数据库服务当前不可用"}), mimetype='text/event-stream', status=503)
-
-#     try:
-#         data = request.json
-#         user_input = data.get("input")
-#         session_id_str = data.get("session_id")
-#         rag_mode_to_stream = data.get("rag_mode", "hybrid") # 客户端指定要流式获取的模式
-
-#         if rag_mode_to_stream not in ['vector', 'graph', 'hybrid']:
-#              return Response(sse_pack({"type": "error", "message": "无效的 RAG 模式请求"}), mimetype='text/event-stream', status=400)
-
-#         if not user_input or not session_id_str:
-#             return Response(sse_pack({"type": "error", "message": "缺少用户输入或会话 ID"}), mimetype='text/event-stream', status=400)
-
-#         user_id = session['user_id']
-#         try:
-#             session_id_int = int(session_id_str)
-#         except ValueError:
-#             return Response(sse_pack({"type": "error", "message": "无效的会话 ID 格式"}), mimetype='text/event-stream', status=400)
-            
-#         chat_session = ChatSession.query.filter_by(id=session_id_int, user_id=user_id).first()
-#         if not chat_session:
-#             return Response(sse_pack({"type": "error", "message": "会话未找到或您无权访问此会话"}), mimetype='text/event-stream', status=404)
-
-#         # --- 流式生成器函数 ---
-#         def event_stream_generator():
-#             full_streamed_response_content = []
-#             # 这些变量用于存储各个RAG流程的检索结果，以便后续保存数据库
-#             # 您需要调整 Demo_chat 或其组件，使其在执行检索后能提供这些信息
-#             current_vector_retrieval_for_db = None
-#             current_graph_retrieval_for_db = None
-#             current_hybrid_context_for_db = None # 混合模式可能使用特定的组合上下文
-            
-#             error_during_rag_call = None
-
-#             try:
-#                 # **关键步骤：调用 Demo_chat 中经改造或新增的、支持流式的方法**
-#                 # 下面的调用是假设性的，您需要根据 Demo_chat.py 的实际情况调整或实现：
-                
-#                 # 假设1: Demo_chat 类有一个统一的流式聊天方法
-#                 # def stream_chat(self, message, mode, history=None) -> generator:
-#                 #     # 1. 根据 mode 获取检索上下文 (vector_ctx, graph_ctx)
-#                 #     # 2. 存储这些上下文到 self 的临时变量，供后续 get_last_retrieval_results 获取
-#                 #     # 3. 构建 prompt
-#                 #     # 4. yield from self.llm.chat_with_ai_stream(prompt, history)
-                
-#                 # 假设2: 或者，我们直接在 app.py 中编排，但更推荐封装在 Demo_chat 中
-#                 # 为简化，我们假设 current_model 有一个改造后的 .chat() 方法，或者一个新的流式方法
-                
-#                 prompt_for_llm = ""
-#                 history_for_llm = [] # 可选，从数据库加载历史
-
-#                 # 1. 根据 rag_mode_to_stream 获取上下文并构建 Prompt
-#                 #    这部分逻辑目前在 Demo_chat.py 的各个 chat 方法中，需要提取或改造
-#                 if rag_mode_to_stream == "vector":
-#                     # 假设: current_model.chat_vector.prepare_streaming_context(user_input) 返回 (prompt, retrieval_data)
-#                     # 或者 current_model.chat_vector.get_retrieval_context()
-#                     # prompt_for_llm, current_vector_retrieval_for_db = current_model.chat_vector.some_method_to_get_prompt_and_retrieval(user_input)
-#                     # 为示意，我们直接调用其web_chat，但理想情况下web_chat应能返回流
-#                     # 这是一个很大的简化和假设，实际需要重构 ChatVectorRAG 等类
-#                     # ---- 概念性代码开始 ----
-#                     if hasattr(current_model.chat_vector, 'get_context_and_prompt'): # 理想的接口
-#                         prompt_for_llm, current_vector_retrieval_for_db = current_model.chat_vector.get_context_and_prompt(user_input, history_for_llm)
-#                     else: # 如果没有，需要您在 Demo_chat 或 ChatVectorRAG 中实现
-#                         # 模拟：获取上下文，然后构建prompt
-#                         # current_vector_retrieval_for_db = current_model.chat_vector.retrieval_result() # 这可能不正确，因为它可能是上次调用的结果
-#                         # prompt_for_llm = current_model.chat_vector._build_prompt(user_input, current_vector_retrieval_for_db, history_for_llm)
-#                         raise NotImplementedError("Demo_chat 或其组件需要提供获取RAG上下文和对应Prompt的方法以支持流式输出")
-#                     # ---- 概念性代码结束 ----
-
-#                 elif rag_mode_to_stream == "graph":
-#                     # 类似地处理 graph RAG
-#                     # prompt_for_llm, current_graph_retrieval_for_db = current_model.chat_graph.some_method_to_get_prompt_and_retrieval(user_input)
-#                     raise NotImplementedError("Graph RAG 流式上下文和Prompt获取逻辑未实现")
-                
-#                 elif rag_mode_to_stream == "hybrid":
-#                     # hybrid 模式的上下文准备和 prompt 构建
-#                     # prompt_for_llm, current_hybrid_context_for_db = current_model.prepare_hybrid_prompt_and_retrieval(user_input)
-#                     raise NotImplementedError("Hybrid RAG 流式上下文和Prompt获取逻辑未实现")
-
-#                 elif rag_mode_to_stream == "without_rag":
-#                     # ChatWithoutRAG = getattr(sys.modules.get('chat.chat_withoutrag'), 'ChatWithoutRAG', None) # 动态获取类
-#                     # if ChatWithoutRAG:
-#                     #     no_rag_chat_instance = ChatWithoutRAG(current_model.llm)
-#                     #     prompt_for_llm = no_rag_chat_instance._build_prompt(user_input, history_for_llm) # 假设有此方法
-#                     # else:
-#                     #     raise ImportError("ChatWithoutRAG 类未找到或未导入")
-#                     # 为简化，直接使用一个简单prompt
-#                     prompt_for_llm = user_input # 最简单的无RAG情况
-                
-#                 # 2. 调用底层的LLM流式接口
-#                 print(f"向LLM发送流式请求 (模式: {rag_mode_to_stream}), Prompt: {prompt_for_llm[:100]}...")
-#                 # 假设 self.llm 是 Demo_chat 中初始化的 LLM Client 实例
-#                 answer_stream = current_model.llm.chat_with_ai_stream(prompt=prompt_for_llm, history=history_for_llm)
-
-#                 for chunk_obj in answer_stream: # LLM Client 返回的原始 chunk 对象
-#                     # 解析 chunk_obj 以获取文本内容，这取决于您的 LLM Client 实现
-#                     # 例如，对于 OpenAI 兼容的客户端:
-#                     chunk_content = ""
-#                     if hasattr(chunk_obj, 'choices') and chunk_obj.choices:
-#                         delta = chunk_obj.choices[0].delta
-#                         if hasattr(delta, 'content') and delta.content is not None:
-#                             chunk_content = delta.content
-                    
-#                     if chunk_content:
-#                         full_streamed_response_content.append(chunk_content)
-#                         yield sse_pack({"type": "chunk", "content": chunk_content})
-#                         # time.sleep(0.01) 
-
-#             except NotImplementedError as nie: # 捕获我们自己抛出的未实现错误
-#                 error_during_rag_call = f"功能实现中: {str(nie)}"
-#                 print(error_during_rag_call)
-#                 yield sse_pack({"type": "error", "message": error_during_rag_call})
-#             except Exception as e:
-#                 error_during_rag_call = f"生成回答时核心模块出错: {str(e)}"
-#                 print(error_during_rag_call)
-#                 traceback.print_exc()
-#                 yield sse_pack({"type": "error", "message": "处理您的请求时发生内部错误。"})
-            
-#             # --- 流结束 ---
-#             if error_during_rag_call:
-#                 yield sse_pack({"type": "end", "status": "error_rag_core", "message": error_during_rag_call})
-#                 return
-
-#             final_streamed_answer = "".join(full_streamed_response_content)
-#             print(f"模式 '{rag_mode_to_stream}' 流式回答完成。")
-
-#             # --- [重要] 获取用于数据库保存的完整信息 ---
-#             # 此时，final_streamed_answer 是流式模式的完整答案。
-#             # 我们还需要其他模式的答案以及所有相关的检索信息才能完整保存 ChatMessage。
-            
-#             # (此部分逻辑与上一轮回复中的非流式 /generate 类似，在流结束后获取)
-#             all_responses_for_db = { "vector_response": None, "graph_response": None, "hybrid_response": None }
-#             all_responses_for_db[f"{rag_mode_to_stream}_response"] = final_streamed_answer
-
-#             # 同步获取其他模式的答案（如果需要）
-#             # ... (省略这部分代码，参考上一轮回复中的实现，它会调用 current_model.chat(stream=False))
-#             # ... (以及获取 current_vector_retrieval_for_db, current_graph_retrieval_for_db 的逻辑)
-#             # 为确保能运行，暂时将其他模式的回答和检索结果设为占位符或从流式模式的结果推断
-#             # 您需要根据实际需求完善这里
-#             if rag_mode_to_stream != "vector":
-#                  all_responses_for_db["vector_response"] = "同步获取vector答案（待实现）"
-#             if rag_mode_to_stream != "graph":
-#                  all_responses_for_db["graph_response"] = "同步获取graph答案（待实现）"
-#             if rag_mode_to_stream != "hybrid":
-#                  all_responses_for_db["hybrid_response"] = "同步获取hybrid答案（待实现）"
-            
-#             # 假设检索结果可以通过某种方式获取，这里用占位符
-#             # current_vector_retrieval_for_db = current_model.get_last_retrieval_results('vector') if hasattr(current_model, 'get_last_retrieval_results') else None
-#             # current_graph_retrieval_for_db = current_model.get_last_raw_graph_strings() if hasattr(current_model, 'get_last_raw_graph_strings') else None
-
-
-#             # --- 将交互结果保存到数据库 ---
-#             message_id_saved = None; timestamp_saved_iso = None; db_save_error_message = None
-#             try:
-#                 print("准备将聊天记录保存到数据库...")
-#                 new_message = ChatMessage(
-#                     session_id=session_id_int, query=user_input,
-#                     vector_response=all_responses_for_db.get("vector_response"),
-#                     graph_response=all_responses_for_db.get("graph_response"),
-#                     hybrid_response=all_responses_for_db.get("hybrid_response"),
-#                     vector_retrieval_json=json.dumps(current_vector_retrieval_for_db) if current_vector_retrieval_for_db else None,
-#                     graph_retrieval_raw=json.dumps(current_graph_retrieval_for_db) if current_graph_retrieval_for_db else None,
-#                     rag_mode_used=rag_mode_to_stream
-#                 )
-#                 db.session.add(new_message)
-#                 db.session.commit()
-#                 message_id_saved = new_message.id
-#                 timestamp_saved_iso = new_message.timestamp.isoformat() + 'Z'
-#                 print(f"聊天记录 {message_id_saved} 已成功保存。")
-#             except Exception as db_err:
-#                 db.session.rollback()
-#                 db_save_error_message = "未能成功将此条聊天记录保存到数据库。"
-#                 print(f"数据库保存错误: {db_err}"); traceback.print_exc()
-
-#             final_sse_payload = {"type": "end", "status": "success" if not db_save_error_message else "warning_dbsave_failed",
-#                                  "message_id": message_id_saved, "timestamp": timestamp_saved_iso}
-#             if db_save_error_message: final_sse_payload["db_error"] = db_save_error_message
-#             yield sse_pack(final_sse_payload)
-#             print("流式响应和数据库操作完成。")
-
-#         return Response(event_stream_generator(), mimetype='text/event-stream')
-
-#     except Exception as setup_e:
-#         error_message = f"处理 /generate 请求时发生意外错误 (流开始前): {str(setup_e)}"
-#         print(error_message); traceback.print_exc()
-#         def error_stream_response(): yield sse_pack({"type": "error", "message": f"处理请求时发生严重错误: {str(setup_e)}"})
-#         return Response(error_stream_response(), mimetype='text/event-stream', status=500)
-
 @app.route('/read-file', methods=['GET'])
 def read_file():
     try:
@@ -756,8 +557,43 @@ def load_model_multi():
         traceback.print_exc()
         return jsonify({"status": "error", "message": str(e)}), 500
     
+# 用于用户自己输入问题进行问答
+@app.route('/ask', methods=['POST'])
+@login_required
+def user_ask_question():
+    user_id = session.get("user_id")
+    data = request.json
+    query = data.get("query", "").strip()
+    model_name = data.get("model_name")
+    key = data.get("key")
+    dataset_info = data.get("dataset")
+    hop = dataset_info.get('hop')
+    type = dataset_info.get('type')
+    entity = dataset_info.get('entity')
+    dataset = dataset_info.get('dataset')
+    table_suffix = dataset_info.get('session')
+    dataset_path = f"../data/{hop}/{type}/{entity}/{dataset}/{dataset}.json"
 
+    if not query:
+        return jsonify({"status": "error", "message": "问题不能为空"}), 400
 
+    try:
+        current_model = Demo_chat(model_name=model_name, api_key=key, dataset_name=dataset, dataset_path=dataset_path, path_name=table_suffix)
+
+        item_data = current_model.user_query(query=query,user_id=user_id)
+
+        mysql = MySQLManager()
+        mysql.insert_record_to_history_table(
+            user_id=user_id,
+            table_suffix=table_suffix,
+            record=item_data
+        )
+
+        return jsonify({"status": "success", "item_data": item_data})
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 
 

@@ -248,6 +248,8 @@ def semantic_pruning(question, knowledge_sequence, topk=30):
     # print()
 
     time_start_cp = -time.time()
+    print("question_embed",question_embed)
+    print("rel_embeddings",rel_embeddings)
     similarity_cp = cosine_similarity_cp(question_embed, rel_embeddings)[0]
     time_start_cp += time.time()
 

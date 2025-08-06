@@ -235,8 +235,7 @@ class MilvusDB(VectorDatabase):
                     "dim": self.dim
                 }
             }],
-            "auto_id":
-            False
+            "auto_id":False,
         }
 
         self.client.create_collection(

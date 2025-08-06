@@ -509,6 +509,9 @@ async function displayHistoryEntries(suffix) {
                 case 'GREEN': backgroundColor = '#d9f7be'; break;
                 case 'RED': backgroundColor = '#ffccc7'; break;
                 case 'YELLOW': backgroundColor = '#fff2e8'; break;
+                default:
+                    backgroundColor = '#F5F5F5'; // GREY作为默认色
+                    break;
             }
             div.style.backgroundColor = backgroundColor;
 
@@ -1452,17 +1455,87 @@ refreshSessionsButton.addEventListener('click', () => {
 
 
 
-// function startAutoRefreshSessionHistory(intervalMs = 60000) {
-//     // 第一次立即执行一次
-//     displaySessionHistory();
-
-//     // 每隔 intervalMs 毫秒执行一次
-//     setInterval(() => {
-//         displaySessionHistory();
-//     }, intervalMs);
-// }
 
 
-// window.addEventListener('DOMContentLoaded', () => {
-//     startAutoRefreshSessionHistory(); // 默认每分钟刷新一次
-// });
+sendButton.addEventListener('click', async function () {
+    if (!selectedDatasetName) { 
+        alert("请在选择所有维度后，从列表中选择一个数据集。"); 
+        return; 
+    }
+
+    const hop = document.getElementById("dim1-hops").value;
+    const type = document.getElementById("dim2-task").value;
+    const entity = document.getElementById("dim3-scale").value;
+    if (!hop || !type || !entity || !selectedDatasetName) {
+        alert("请完整选择三个下拉框的内容！");
+        return;
+    }
+
+    const postData = {
+        hop: hop,
+        type: type,
+        entity: entity,
+        dataset: selectedDatasetName,
+        session: currentSession
+    };
+
+    const queryInput = document.getElementById('user-input');
+    const answerContentDiv = document.getElementById('answer-content');
+
+    const query = queryInput.value.trim();
+    if (!query) {
+        alert("请输入问题！");
+        return;
+    }
+
+    // 构造完整 ask 请求数据
+    const askData = {
+        dataset: postData,
+        query: query,
+        model_name: modelSelect.value,
+        key: apiKeyInput.value,
+        top_k: parseInt(document.getElementById("top-k").value) || 5,
+        threshold: parseFloat(document.getElementById("similarity-threshold").value) || 0.8,
+        chunksize: parseInt(document.getElementById("chunk-size").value) || 128,
+        k_hop: parseInt(document.getElementById("k-hop").value) || 1,
+        max_keywords: parseInt(document.getElementById("max-keywords").value) || 10,
+        pruning: document.getElementById("pruning").value === "yes",
+        strategy: document.getElementById("strategy").value || "union",
+        vector_proportion: parseFloat(document.getElementById("vector-proportion").value) || 0.9,
+        graph_proportion: parseFloat(document.getElementById("graph-proportion").value) || 0.8,
+    };
+
+    try {
+        const response = await fetch("/ask", { 
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(askData)
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`请求失败: ${response.status} ${errorText}`);
+        }
+
+        const result = await response.json();
+        const historySessionSelect = document.getElementById('history-session-select');
+        console.log("shiyong",historySessionSelect)
+
+        
+        if (result && result.item_data) {
+            answerContentDiv.innerHTML = `
+                <strong>Question:</strong> ${result.item_data.query}<br>
+                <strong>Answer:</strong> ${result.item_data.hybrid_response}
+            `;
+        } else {
+            answerContentDiv.innerHTML = `<span style="color:red;">⚠️ 没有返回有效数据</span>`;
+        }
+
+        // 刷新历史
+        await displayHistoryEntries(historySessionSelect);
+        
+    } catch (error) {
+        console.error('请求失败:', error);
+        answerContentDiv.innerHTML = `<span style="color:red;">❌ 请求失败，请检查控制台</span>`;
+    }
+});

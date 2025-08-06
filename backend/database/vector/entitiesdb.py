@@ -2,7 +2,7 @@
 Author: lpz 1565561624@qq.com
 Date: 2025-08-03 08:09:32
 LastEditors: lpz 1565561624@qq.com
-LastEditTime: 2025-08-06 09:21:47
+LastEditTime: 2025-08-06 18:26:31
 FilePath: /lipz/NeutronRAG/NeutronRAG/backend/database/vector/entitiesdb.py
 Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
 '''
@@ -25,7 +25,7 @@ class EntitiesDB:
         device="cuda:2",
         verbose=False,
     ):
-        self.embed_model = Ollama_EmbeddingEnv()
+        self.embed_model = EmbeddingEnv()
 
         self.entities = sorted(list(entities))
         self.db_name = f"{db_name}_entities"
@@ -58,7 +58,7 @@ class EntitiesDB:
             ), "need specify the entities when create new vector database."
 
         self.db = MilvusDB(
-            db_name, 1024, overwrite=overwrite, metric="COSINE", verbose=False
+            self.db_name, 1024, overwrite=overwrite, metric="COSINE", verbose=False
         )
         if overwrite:
             # Strong, Bounded, Eventually, Session
@@ -80,9 +80,6 @@ class EntitiesDB:
             ids = list(range(start_idx + start_num, end_idx + start_num))
             self.insert(ids, embeddings)
             assert len(ids) == len(embeddings)
-            print(ids)
-            if i % (step *  10) == 0:
-                print(f'insert {len(ids)} vectors')
 
     def get_embedding(self, query):
         if isinstance(query, list):
@@ -105,6 +102,18 @@ class EntitiesDB:
 
         self.db.insert([id, query_embedding])
 
-if __name__ == "__main__":
+def test_research():
     graph = NebulaDB()
     db = EntitiesDB(entities=graph.entities)
+    question = "Who won the 2022 Tour de France?"
+
+    embed_model = db.embed_model
+    embedding = embed_model.get_embedding(question)
+    ids, distances = db.search(embedding, limit=3)
+    print("🔍 Search Results:")
+    for i, (r_id, score) in enumerate(zip(ids, distances)):
+        print(f"{i+1}. ID: {r_id}, Score: {score}")
+
+
+if __name__ == "__main__":
+    test_research()

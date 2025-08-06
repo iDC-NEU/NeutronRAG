@@ -2,7 +2,7 @@
 Author: fzb fzb0316@163.com
 Date: 2024-09-19 08:48:47
 LastEditors: lpz 1565561624@qq.com
-LastEditTime: 2025-07-29 15:43:49
+LastEditTime: 2025-08-06 16:29:16
 FilePath: /RAGWebUi_demo/chat/chat_graphrag.py
 Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
 '''
@@ -117,7 +117,7 @@ class ChatGraphRAG(ChatBase):
     @override
     def web_chat(self, message: str,history: List[Optional[List]] | None = None):
         
-        self.triplets = self.retriver_graph.retrieve_2hop(question=message, pruning = 30)
+        self.triplets = self.retrieve_triplets(message=message)
 
         print("graph retrieval result",self.triplets)
 

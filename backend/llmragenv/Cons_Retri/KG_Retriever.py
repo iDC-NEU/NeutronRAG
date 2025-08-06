@@ -2,7 +2,7 @@
 Author: fzb fzb0316@163.com
 Date: 2024-09-19 08:48:47
 LastEditors: lpz 1565561624@qq.com
-LastEditTime: 2025-07-29 16:03:00
+LastEditTime: 2025-08-06 16:09:42
 FilePath: /RAGWebUi_demo/llmragenv/Retriever/retriever_graph.py
 Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
 '''
@@ -156,7 +156,7 @@ class RetrieverGraph(object):
 
         keywords = self.extract_keyword(question)
         print("keywords:",keywords)
-        query_results = {}
+        
 
         if pruning:
             rel_map = self.graph_database.get_rel_map(entities=keywords, limit=10)

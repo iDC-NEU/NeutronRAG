@@ -2,7 +2,7 @@
 Author: fzb fzb0316@163.com
 Date: 2024-09-20 13:37:09
 LastEditors: lpz 1565561624@qq.com
-LastEditTime: 2025-04-17 23:14:07
+LastEditTime: 2025-08-06 15:42:12
 FilePath: /RAGWebUi_demo/llmragenv/LLM/llm_factory.py
 Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
 '''
@@ -24,7 +24,7 @@ from config.config import Config
 
 
 LLMProvider = {
-    "zhipu" : [],
+    "zhipu" : ["glm-4.5"],
     "baichuan" : [],
     "qwen" : ["qwen-plus","qwen-turbo-latest"],
     "moonshot" : [],
