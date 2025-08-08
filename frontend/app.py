@@ -28,21 +28,18 @@ from database.mysql.mysql import MySQLManager
 
 # --- RAG 核心逻辑导入 ---
 RAG_CORE_LOADED = False
-try:
-    # 动态添加 backend 目录到 sys.path
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    # 假设 frontend 文件夹和 backend 在同一级目录
-    backend_dir = os.path.join(os.path.dirname(current_dir), 'backend')
-    if backend_dir not in sys.path:
-        sys.path.append(backend_dir)
-    
-    from llmragenv.demo_chat import Demo_chat
-    from evaluator import simulate
-    RAG_CORE_LOADED = True
-except ImportError as e:
-    print(f"警告：无法导入 RAG 核心逻辑：{e}")
-    Demo_chat = None
-    simulate = None
+
+# 动态添加 backend 目录到 sys.path
+current_dir = os.path.dirname(os.path.abspath(__file__))
+# 假设 frontend 文件夹和 backend 在同一级目录
+backend_dir = os.path.join(os.path.dirname(current_dir), 'backend')
+if backend_dir not in sys.path:
+    sys.path.append(backend_dir)
+
+from llmragenv.demo_chat import Demo_chat
+from evaluator import simulate
+RAG_CORE_LOADED = True
+
 
 ################字典存入的mysql是TEXT这个在还原回来#####################
 def parse_json_field(value):
@@ -845,6 +842,11 @@ def create_db_command():
         print("错误：无法创建表，数据库初始化失败。")
 
 # --- 主程序入口 ---
+@app.route('/')
+def hello():
+    return "Hello from Flask with Gunicorn!"
+
+
 if __name__ == '__main__':
     ui_port = int(os.environ.get('FLASK_PORT', 5000))
     print(f" * 启动 Flask 应用于 http://0.0.0.0:{ui_port}")

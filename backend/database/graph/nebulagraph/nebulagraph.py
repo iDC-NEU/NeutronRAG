@@ -25,13 +25,23 @@ class NebulaClient:
         self.session = self.connection_pool.get_session('root', 'nebula')
 
     def __del__(self):
-        if self.connection_pool:
-            self.connection_pool.close()
-        if self.session:
-            try:
-                self.session.release()
-            except Exception as e:
-                print(f"Unexpected error: {e}")
+        # 先安全释放 session（如果存在且是活跃的）
+        
+        # try:
+        #     print("这里尝试关闭session")
+        #     print(self.session._session_id)
+        #     if hasattr(self, 'session') and self.session is not None:
+        #         self.session.release()
+        # except Exception as e:
+        #     print(f"[NebulaClient] Failed to release session: {e}")
+
+        # # 再关闭连接池
+        # try:
+        #     if hasattr(self, 'connection_pool') and self.connection_pool is not None:
+        #         self.connection_pool.close()
+        # except Exception as e:
+        #     print(f"[NebulaClient] Failed to close connection pool: {e}")
+        pass
 
     def create_space(self, space_name):
         self.session.execute(
@@ -268,8 +278,8 @@ class NebulaDB(GraphDatabase):
         # self.triplet2id, self.triplet_embeddings = self.generate_embedding()
         # self.entities = self.get_all_entities()
 
-    def __del__(self):
-        del self.client
+    # def __del__(self):
+    #     pass
 
     def init_nebula_store(self):
         nebula_store = NebulaGraphStore(

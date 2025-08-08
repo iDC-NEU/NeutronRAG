@@ -2,7 +2,7 @@
 Author: lpz 1565561624@qq.com
 Date: 2025-08-03 08:09:32
 LastEditors: lpz 1565561624@qq.com
-LastEditTime: 2025-08-06 18:26:31
+LastEditTime: 2025-08-08 21:31:26
 FilePath: /lipz/NeutronRAG/NeutronRAG/backend/database/vector/entitiesdb.py
 Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
 '''
@@ -112,7 +112,8 @@ def test_research():
     ids, distances = db.search(embedding, limit=3)
     print("🔍 Search Results:")
     for i, (r_id, score) in enumerate(zip(ids, distances)):
-        print(f"{i+1}. ID: {r_id}, Score: {score}")
+        entity = db.id2entity.get(r_id, "Unknown")
+        print(f"{i+1}. ID: {r_id}, Entity: {entity}, Score: {score}")
 
 
 if __name__ == "__main__":

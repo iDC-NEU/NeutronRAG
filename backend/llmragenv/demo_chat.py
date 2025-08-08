@@ -2,7 +2,7 @@
 Author: lpz 1565561624@qq.com
 Date: 2025-03-19 20:28:13
 LastEditors: lpz 1565561624@qq.com
-LastEditTime: 2025-08-06 20:16:45
+LastEditTime: 2025-08-08 21:03:53
 FilePath: /lipz/NeutronRAG/NeutronRAG/backend/llmragenv/demo_chat.py
 Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
 '''
@@ -599,17 +599,13 @@ class Demo_chat:
 
     def new_history_chat(self, mode="rewrite"):
         evidence_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "evaluator", "rgb_evidence_test.json")
+        print("开始读取文件")
         with open(self.dataset_path, "r") as f:  # 读取模式改为'r'，避免覆盖原数据
             data = json.load(f)
+        print("读取文件正确")
         offset = 0
         if mode == "rewrite":
-            try:
-                with open(self.path_name, 'w') as f:
-                    pass  # 打开文件并立即关闭，'w' 模式会清空文件内容
-                print(f"文件 {self.path_name} 已被清空。")
-            except Exception as e:
-                print(f"清空文件时出错: {e}")
-                return
+            print("rewrite")
         if mode == "continue":
             last_processed_id = None
             try:
@@ -631,9 +627,7 @@ class Demo_chat:
             offset = start_index+1
             
 
-        
-        print("dataset_path:",self.dataset_path)
-        data = data[offset:3]
+        data = data[offset:10]
 
         # 用于计算评估平均值
         total_queries = 0
@@ -795,13 +789,6 @@ class Demo_chat:
             }
 
             
-
-            # with open(self.path_name, 'a') as f: 
-            #     json.dump(item_data, f, separators=(',', ':'))  # 使用 ',' 和 ':' 分隔符
-            #     f.write('\n')  # 每个元素占一行
-            #     print(f"Results successfully saved to {self.path_name}")
-            
-            # 流式返回
             yield item_data
 
         
@@ -1032,3 +1019,62 @@ if __name__ == "__main__":
 
 
 
+
+
+###########New#################
+    
+
+#################RGB########################################
+# MISSING_ENTITY_list: [] 0 
+# INCORRECT_ENTITY_list: [161,90,6,30,32,35,70,89,146,266,269,288,297] 13
+# FAULTY_PRUNING_list: [77, 124, 153, 240,137,27,203] 7
+# NOISE_INTERFERENCE_list: [17, 103, 128, 158, 183, 216, 230, 241] 8
+# HOP_LIMITATION_list: [] 0
+# OTHERS_list: [] 0
+    
+
+
+#################Intergation########################################
+# MISSING_ENTITY_list: [38,59,16,44,49,52,83,91] 8
+# INCORRECT_ENTITY_list: [51,63,86,54,66,96] 6
+# FAULTY_PRUNING_list: [43, 50, 68,7,30,39,42,47] 8
+# NOISE_INTERFERENCE_list: [13, 26, 28, 69, 85] 5
+# HOP_LIMITATION_list: [] 0
+# OTHERS_list: [] 
+    
+
+#################HOTPOT########################################
+#MISSING_ENTITY_list: [509,268,13,402,421,173,304,468,599,478,484,371,122] 13
+#INCORRECT_ENTITY_list: [256,384,130,519,264,393,142,153,31,287,36,164,38,292,426,555,172,45,434,57,60,62,66,196,591,592,593,464,466,475,221,95,358,485,246,503,381,254] 36
+#FAULTY_PRUNING_list: [7, 8, 35, 69, 96, 132, 140, 230, 261, 280, 296, 300, 302, 392, 408, 435, 467, 479, 481, 486, 514, 549, 567, 586,413,288,297,558,180,190,78,207,229,245] 34
+#NOISE_INTERFERENCE_list: [2, 16, 29, 42, 50, 51, 70, 77, 100, 101, 104, 112, 121, 139, 175, 200, 205, 206, 216, 222, 226, 235, 242, 244, 248, 266, 276, 291, 315, 323, 326, 338, 342, 349, 353, 355, 363, 367, 377, 397, 418, 423, 428, 441, 445, 447, 449, 482, 487, 489, 493, 505, 513, 532, 537, 550, 559, 580, 583, 589] 60
+#HOP_LIMITATION_list: [132, 392,4, 11, 41, 46, 59, 108, 138, 143, 145, 149, 154, 187, 208, 215, 218, 255, 265, 310, 314, 378, 379, 488, 491, 511, 512, 522, 527, 530, 560, 585, 587,368]34
+    
+
+#################Multihop########################################
+#完全匹配的ID (noise_list): [11, 31, 100, 37, 144, 47, 215, 162, 205, 83, 287, 14, 258, 190] 数量: 14
+#完全不匹配的ID (missing_list): [26, 149, 16, 104, 39, 126, 129, 236, 63, 150, 240, 241, 137, 35,133] 数量: 14
+#HOP_LIMITATION_list: [133, 2, 92, 95, 94, 10, 96, 214, 165, 292, 98, 99, 24, 140, 40, 255, 107, 105, 108, 109, 219, 43, 232, 48, 114, 50, 154, 18, 118, 270, 120, 54, 56, 135, 185, 127, 64, 171, 132, 70, 71, 147, 298, 195, 33, 123, 163, 79, 81, 6, 136, 224, 85, 209, 141, 87, 285, 1, 13, 216, 138, 192, 257, 65, 110] 数量: 65
+
+
+#NOISE_INTERFERENCE_list [11, 31, 100, 37, 144, 47, 215, 162, 205, 83, 287, 14, 258, 190,214,135] 16
+# MISSING_ENTITY_list: [16,63,150,35,133,2,94,10,165,99,107,109,43,48,50,270,127,64,132,147,195,163,79,81,136,85,87,285,1,13,216,138, 192] 32
+#INCORRECT_ENTITY_list: [149,129,240,24,33,209] 6
+#FAULTY_PRUNING_list [104,92,108,18,6] 5
+# HOP_LIMITATION_list = [26, 31, 16, 255, 105, 232, 114, 154, 118, 120, 54, 56, 185, 236, 215, 162, 171, 70, 71, 298, 240, 123, 83, 224, 287, 257, 14, 65, 258, 110,39，126，236,241,137,95,96,292,98,140,255,219,141] 44
+#OTHERS []
+
+
+# HOP Limitation [4, 11, 41, 46, 59, 108, 138, 143, 145, 149, 154, 187, 208, 215, 218, 255, 265, 310, 314, 378, 379, 488, 491, 511, 512, 522, 527, 530, 560, 585, 587]
+    
+    # other_list = [4, 31, 45, 78, 95, 145, 180, 190, 221, 229, 288, 292, 368, 371, 384, 434, 464, 466, 475, 503, 519, 592,57, 59, 62, 142, 153, 164, 172, 196, 207, 218, 246, 256, 264, 287, 358, 381, 555, 560, 585, 587, 591, 593,11, 13, 36, 38, 41, 46, 60, 66, 108, 122, 130, 138, 143, 149, 154, 173, 187, 208, 215, 245, 254, 255, 265, 268, 297, 304, 310, 314, 378, 379, 393, 402, 413, 421, 426, 468, 478, 484, 485, 488, 491, 509, 511, 512, 522, 527, 530, 558, 599]
+
+
+    # # print("HOP Limitation",get_hop_limit_id2(evidence_path=hotpotqa_evidencs_path,retrieval_path=hotpotqa_retrieval_path,error_id=other_list))
+
+    # hop_list = [4, 11, 41, 46, 59, 108, 138, 143, 145, 149, 154, 187, 208, 215, 218, 255, 265, 310, 314, 378, 379, 488, 491, 511, 512, 522, 527, 530, 560, 585, 587]
+
+    # print(len(hop_list),len(hop_list))
+
+    # difference = list(set(other_list) - set(hop_list))
+    # print(difference)

@@ -2,7 +2,7 @@
 Author: fzb fzb0316@163.com
 Date: 2024-09-19 08:48:47
 LastEditors: lpz 1565561624@qq.com
-LastEditTime: 2025-08-06 16:09:42
+LastEditTime: 2025-08-08 21:54:20
 FilePath: /RAGWebUi_demo/llmragenv/Retriever/retriever_graph.py
 Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
 '''
@@ -14,6 +14,7 @@ Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查�
 
 '''
 # from icecream import ic
+from database.graph.nebulagraph.nebulagraph import NebulaDB
 from llmragenv.LLM.llm_base import LLMBase
 from database.graph.graph_database import GraphDatabase
 import numpy as np
@@ -366,10 +367,10 @@ class RetrieverEntities(object):
     def retrieve(
         self,
         question,
-        limit=30,
-        pruning=30,
+        limit=10,
+        pruning=5,
         depth=2,
-        entnum=10,
+        entnum=3,
     ):
         q_embeddings = self.entities_db.get_embedding(question)
         ids, distances = self.entities_db.search(q_embeddings, limit=entnum)
@@ -419,12 +420,50 @@ class RetrieverEntities(object):
             print([len(x) for x in knowledge_sequences_pruning])
 
             knowledge_sequences = knowledge_sequences_pruning
+
+        knowledge_sequences = flatten_2d_list(knowledge_sequences)
             
         return knowledge_sequences
+    
+
+def flatten_2d_list(nested_list):
+    result = []
+    for sub in nested_list:
+        for seq in sub:
+            result.append(seq)
+    return result
 
 
 
 # keywords: ['2022', 'Tour de france', 'Won', 'Apple']
 # question: Who won the 2022 Tour de France?
-# if __name__ == "__main__":
+
+def test_retriever_entities():
+    # 初始化 GraphDatabase 和 EntitiesDB 实例
+    graphdb = NebulaDB()  # 注意：这里假设你的 NebulaDB 实例可以直接初始化
+    entities_db = EntitiesDB(entities=graphdb.entities)  # 假设 graphdb.entities 已加载实体列表
+
+    # 创建 RetrieverEntities 实例
+    retriever = RetrieverEntities(graphdb=graphdb, entities_db=entities_db)
+
+    # 定义测试问题
+    question = "Who won the 2022 Tour de France?"
+
+    # 调用 retrieve 方法
+    result = retriever.retrieve(
+        question=question,
+        limit=30,
+        pruning=30,
+        depth=2,
+        entnum=5
+    )
+
+    print(result)
+if __name__ == "__main__":
+    test_retriever_entities()
+
+
+
+
+    
     
