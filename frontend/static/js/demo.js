@@ -1125,7 +1125,7 @@ async function handleHistoryItemClick(event) {
          if (vectorResponse.ok) {
              const d = await vectorResponse.json();
              if (d?.chunks && Array.isArray(d.chunks)) {
-                 vectorContent.innerHTML = d.chunks.map((c, i) => `<div class="retrieval-result-item"><p><b>Chunk ${i + 1}:</b> ${c || 'N/A'}</p></div>`).join('');
+                 vectorContent.innerHTML = highlightChunksBasedOnGroundTruth(d.chunks, div.dataset.answer);
              } else {
                  vectorContent.innerHTML = '<p>未找到向量块。</p>';
              }
@@ -1201,6 +1201,128 @@ function toggleResize(iconElement, targetType = 'section') {
             }, 300); 
         } 
     }
+}
+
+function highlightChunksBasedOnGroundTruth(chunks, groundTruthAnswer) {
+    if (!groundTruthAnswer || !chunks.length) {
+        return chunks.map((c, i) => 
+            `<div class="retrieval-result-item"><p><b>Chunk ${i + 1}:</b> ${c || 'N/A'}</p></div>`
+        ).join('');
+    }
+
+    const answerVariants = extractAnswerVariants(groundTruthAnswer);
+    
+    return chunks.map((chunk, i) => {
+        const highlightedContent = highlightRelevantText(chunk || 'N/A', answerVariants);
+        return `<div class="retrieval-result-item"><p><b>Chunk ${i + 1}:</b> ${highlightedContent}</p></div>`;
+    }).join('');
+}
+
+function extractAnswerVariants(groundTruthAnswer) {
+    if (!groundTruthAnswer) return [];
+    
+    // 如果是简单字符串（不是JSON格式），直接返回
+    if (typeof groundTruthAnswer === 'string' && 
+        !groundTruthAnswer.startsWith('[') && 
+        !groundTruthAnswer.startsWith('{')) {
+        return [groundTruthAnswer.trim()];
+    }
+    
+    try {
+        let parsed;
+        if (typeof groundTruthAnswer === 'string') {
+            let jsonString = groundTruthAnswer;
+            
+            // 检查是否是Python列表格式
+            if (jsonString.startsWith('[') && jsonString.endsWith(']') && jsonString.includes("'")) {
+                // 检查是否包含撇号（如 Apple's），如果有则直接用eval
+                if (jsonString.includes("\\'")) {
+                    try {
+                        const evaluated = eval(jsonString);
+                        if (Array.isArray(evaluated)) {
+                            parsed = evaluated;
+                        } else {
+                            throw new Error('Not an array');
+                        }
+                    } catch (evalError) {
+                        return [jsonString.trim()];
+                    }
+                } else {
+                    // 没有撇号，尝试简单替换
+                    try {
+                        const simpleReplaced = jsonString.replace(/'/g, '"');
+                        parsed = JSON.parse(simpleReplaced);
+                    } catch (replaceError) {
+                        // 简单替换失败，使用eval备选方案
+                        try {
+                            const evaluated = eval(jsonString);
+                            if (Array.isArray(evaluated)) {
+                                parsed = evaluated;
+                            } else {
+                                throw new Error('Not an array');
+                            }
+                        } catch (evalError) {
+                            return [jsonString.trim()];
+                        }
+                    }
+                }
+            } else {
+                // 标准JSON格式
+                parsed = JSON.parse(jsonString);
+            }
+        } else {
+            parsed = groundTruthAnswer;
+        }
+        
+        const variants = [];
+        if (Array.isArray(parsed)) {
+            parsed.forEach(item => {
+                if (Array.isArray(item)) {
+                    variants.push(...item);
+                } else {
+                    variants.push(item);
+                }
+            });
+        } else {
+            variants.push(parsed);
+        }
+        
+        return variants.filter(v => v && typeof v === 'string' && v.trim());
+    } catch (e) {
+        // 最终备选方案：直接使用原字符串
+        return typeof groundTruthAnswer === 'string' ? [groundTruthAnswer.trim()] : [];
+    }
+}
+
+function highlightRelevantText(content, answerVariants) {
+    if (!content || !answerVariants || answerVariants.length === 0) {
+        return content || '';
+    }
+    
+    let result = content;
+    
+    // 按长度降序排列，优先匹配长短语，避免重复高亮
+    const sortedVariants = answerVariants
+        .filter(variant => variant && typeof variant === 'string' && variant.trim().length >= 2)
+        .sort((a, b) => b.length - a.length);
+    
+    sortedVariants.forEach(variant => {
+        const trimmedVariant = variant.trim();
+        if (!trimmedVariant) return;
+        
+        try {
+            const regex = new RegExp(`(${escapeRegex(trimmedVariant)})`, 'gi');
+            result = result.replace(regex, '<span style="background-color: #DBEEC0;">$1</span>');
+        } catch (e) {
+            console.warn('Regex error for variant:', trimmedVariant, e);
+        }
+    });
+    
+    return result;
+}
+
+function escapeRegex(string) {
+    return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 // --- 页面初始化与事件绑定 ---
