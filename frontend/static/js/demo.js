@@ -1188,6 +1188,21 @@ function updateAnswerStore(data) {
     console.log("已更新答案存储:", currentAnswers);
 }
 
+function toggleResize(iconElement, targetType = 'section') {
+    const targetElement = iconElement.closest(targetType === 'section' ? '.section-box' : '.box');
+    if (!targetElement) return; 
+    const isEnlarged = targetElement.classList.toggle('enlarged');
+    iconElement.textContent = isEnlarged ? 'fullscreen_exit' : 'fullscreen';
+    if (targetElement.contains(cyContainer) || targetElement.id === 'cy-container') {
+        if (currentCytoscapeInstance) { 
+            setTimeout(() => { 
+                currentCytoscapeInstance.resize(); 
+                currentCytoscapeInstance.fit(null, 30); 
+            }, 300); 
+        } 
+    }
+}
+
 // --- 页面初始化与事件绑定 ---
 document.addEventListener('DOMContentLoaded', async () => {
     console.log("DOM 完全加载并解析。");
