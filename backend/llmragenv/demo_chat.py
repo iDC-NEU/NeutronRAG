@@ -548,7 +548,20 @@ class Demo_chat:
 
         answers = self.llm.chat_with_ai(prompt, history)
         return answers
+    
+    def no_rag_chat(self,message: str,history=None):
 
+        No_rag_prompt = (
+
+        "You are an expert Q&A system that is trusted around the world. "
+        "Note that only answer questions without explanation.\n"
+        "Query: {message}\n"
+        "Answer:"
+         )
+        prompt = No_rag_prompt.format(message = message)
+
+        answers = self.llm.chat_with_ai(prompt, history)
+        return answers
 #按这个格式       
 # {"id":,"query";,vector_response:,graph_response:,hybrid_response,vector_retrieval_result,raph_retrieval_result}
     # MISSING_ENTITY_list= [90] #1
@@ -687,6 +700,7 @@ class Demo_chat:
             response_vector = self.chat_vector.web_chat(message=query, history=None)
             response_graph = self.chat_graph.web_chat(message=query, history=None)
             response_hybrid = self.hybrid_chat(message=query)
+            response_no_rag = self.no_rag_chat(message=query, history=None)
 
             flag_vector = checkanswer(response_vector, answer, "True")
             flag_graph = checkanswer(response_graph, answer, "True")
@@ -778,6 +792,7 @@ class Demo_chat:
                 "query": query,
                 "answer": answer,
                 "type": response_type,
+                "no_rag_response": response_no_rag,
                 "vector_response": response_vector,
                 "graph_response": response_graph,
                 "hybrid_response": response_hybrid,
@@ -959,6 +974,7 @@ class Demo_chat:
         response_vector = self.chat_vector.web_chat(message=query, history=None)
         response_graph = self.chat_graph.web_chat(message=query, history=None)
         response_hybrid = self.hybrid_chat(message=query)
+        response_no_rag = self.no_rag_chat(message=query, history=None)
         vector_retrieval_result = self.chat_vector.retrieval_result()
         graph_retrieval_result = self.chat_graph.retrieval_result()
 
@@ -967,6 +983,7 @@ class Demo_chat:
             "query": query,
             "answer": "",
             "type": response_type,
+            "no_rag_response": response_no_rag,
             "vector_response": response_vector,
             "graph_response": response_graph,
             "hybrid_response": response_hybrid,

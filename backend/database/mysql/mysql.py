@@ -38,6 +38,7 @@ CREATE TABLE IF NOT EXISTS `{table_name}` (
     `vector_response` TEXT,
     `graph_response` TEXT,
     `hybrid_response` TEXT,
+    `no_rag_response` TEXT,
 
     `vector_retrieval_result` TEXT,
     `graph_retrieval_result` TEXT,
@@ -495,14 +496,14 @@ class MySQLManager:
         insert_sql = f"""
         INSERT INTO `{table_name}` (
             id, query, answer, type,
-            vector_response, graph_response, hybrid_response,
+            vector_response, graph_response, hybrid_response, no_rag_response,
             vector_retrieval_result, graph_retrieval_result,
             vector_evaluation, graph_evaluation, hybrid_evaluation,
             avg_vector_evaluation, avg_graph_evaluation, avg_hybrid_evaluation,
             v_error, g_error, h_error
         ) VALUES (
             %(id)s, %(query)s, %(answer)s, %(type)s,
-            %(vector_response)s, %(graph_response)s, %(hybrid_response)s,
+            %(vector_response)s, %(graph_response)s, %(hybrid_response)s, %(no_rag_response)s,
             %(vector_retrieval_result)s, %(graph_retrieval_result)s,
             %(vector_evaluation)s, %(graph_evaluation)s, %(hybrid_evaluation)s,
             %(avg_vector_evaluation)s, %(avg_graph_evaluation)s, %(avg_hybrid_evaluation)s,
@@ -526,6 +527,7 @@ class MySQLManager:
             "vector_response": record.get("vector_response"),
             "graph_response": record.get("graph_response"),
             "hybrid_response": record.get("hybrid_response"),
+            "no_rag_response": record.get("no_rag_response"),
 
             "vector_retrieval_result": safe_json(record.get("vector_retrieval_result")),
             "graph_retrieval_result": safe_json(record.get("graph_retrieval_result")),
@@ -559,7 +561,7 @@ class MySQLManager:
 
         columns = [
             "id", "query", "answer", "type",
-            "vector_response", "graph_response", "hybrid_response",
+            "vector_response", "graph_response", "hybrid_response", "no_rag_response",
             "vector_retrieval_result", "graph_retrieval_result",
             "vector_evaluation", "graph_evaluation", "hybrid_evaluation",
             "avg_vector_evaluation", "avg_graph_evaluation", "avg_hybrid_evaluation",

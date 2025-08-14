@@ -234,7 +234,12 @@ def semantic_pruning(question, knowledge_sequence, topk=30):
     rel_embeddings = get_text_embeddings(knowledge_sequence)
     time_kg_embedding += time.time()
     print(f"kg_embedding {time_kg_embedding}")
-
+    
+    # 如果检索结果为空
+    if not rel_embeddings:
+        print("No valid embeddings for knowledge_sequence, returning empty list.")
+        return []
+    
     if len(rel_embeddings) == 1:
         rel_embeddings = np.array(rel_embeddings).reshape(1, -1)
     else:
