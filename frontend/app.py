@@ -457,9 +457,9 @@ def get_history_entries():
 
     try:
         cursor = mysql.cursor
-        cursor.execute(f"SELECT id, query, answer, type, vector_response, graph_response, hybrid_response FROM `{table_name}` ORDER BY created_at DESC LIMIT 100")
+        cursor.execute(f"SELECT id, query, answer, type, vector_response, graph_response, hybrid_response, no_rag_response FROM `{table_name}` ORDER BY created_at DESC LIMIT 100")
         rows = cursor.fetchall()
-        entries = [{"id": r[0], "query": r[1], "answer": r[2], "type": r[3], "vector_response": r[4], "graph_response": r[5], "hybrid_response": r[6]} for r in rows]
+        entries = [{"id": r[0], "query": r[1], "answer": r[2], "type": r[3], "vector_response": r[4], "graph_response": r[5], "hybrid_response": r[6], "no_rag_response": r[7]} for r in rows]
         return jsonify({"entries": entries})
     except Exception as e:
         if "doesn't exist" in str(e):

@@ -36,7 +36,7 @@ function hideLoading() {
 let isGenerating = false;
 let abortController = new AbortController();
 let currentCytoscapeInstance = null;
-let currentAnswers = { query: "", vector: "", graph: "", hybrid: "" };
+let currentAnswers = { query: "", vector: "", graph: "", hybrid: "" , no_rag: ""};
 const placeholderText = `<div class="placeholder-text">请选择 RAG 模式，输入内容或从历史记录中选择，然后点击应用设置。</div>`;
 let history_list = [];
 let selectedDatasetName = null;
@@ -538,6 +538,7 @@ async function displayHistoryEntries(suffix) {
             div.dataset.vectorResponse = item.vector_response || '';
             div.dataset.graphResponse = item.graph_response || '';
             div.dataset.hybridResponse = item.hybrid_response || '';
+            div.dataset.noragResponse = item.no_rag_response || '';
             div.dataset.query = item.query || '';
             div.dataset.answer = answerText;
 
@@ -548,6 +549,7 @@ async function displayHistoryEntries(suffix) {
                 <p><strong>V:</strong> ${item.vector_response || 'N/A'}</p>
                 <p><strong>G:</strong> ${item.graph_response || 'N/A'}</p>
                 <p><strong>H:</strong> ${item.hybrid_response || 'N/A'}</p>
+                <p><strong>N:</strong> ${item.no_rag_response}</p>
                 ${answerSnippet ? `<p><strong>Ans:</strong> ${answerSnippet}</p>` : ''}
             `;
 
@@ -727,6 +729,7 @@ applySettingsButton.addEventListener("click", async () => {
                                         vector_response: data.item_data.vector_response,
                                         graph_response: data.item_data.graph_response,
                                         hybrid_response: data.item_data.hybrid_response,
+                                        no_rag_response: data.item_data.no_rag_response,
                                         vectorRetrieval: data.item_data.vector_retrieval_result,
                                         graphRetrieval: data.item_data.graph_retrieval_result,
                                         vectorEvaluation: data.item_data.vector_evaluation,
@@ -1097,11 +1100,13 @@ async function handleHistoryItemClick(event) {
      const vContent = div.querySelector('p:nth-of-type(3)')?.textContent.replace('V:', '').trim() || 'Loading...';
      const gContent = div.querySelector('p:nth-of-type(4)')?.textContent.replace('G:', '').trim() || 'Loading...';
      const hContent = div.querySelector('p:nth-of-type(5)')?.textContent.replace('H:', '').trim() || 'Loading...';
+     const nContent = div.dataset.noragResponse || 'Loading...';
      current_graph_response = gContent;
      current_vector_response = vContent;
      current_hybrid_response = hContent;
-     clickedItemData = { id: itemId, query: queryText,vector_response:  current_vector_response,graph_response:  current_graph_response,hybrid_response:  current_hybrid_response};
-     console.log(`历史项被点击: ID ${itemId}`);
+     current_no_rag_response = nContent;
+     clickedItemData = { id: itemId, query: queryText, vector_response: current_vector_response, graph_response: current_graph_response, hybrid_response: current_hybrid_response, no_rag_response: current_no_rag_response };
+     console.log(`历史项被点击: ID ${itemId}`);
 
      document.querySelectorAll('.question-item.selected').forEach(el => el.classList.remove('selected'));
      div.classList.add('selected');
@@ -1185,6 +1190,7 @@ function updateAnswerStore(data) {
     currentAnswers.vector = data.vector_response !== undefined ? data.vector_response : "";
     currentAnswers.graph = data.graph_response !== undefined ? data.graph_response : "";
     currentAnswers.hybrid = data.hybrid_response !== undefined ? data.hybrid_response : "";
+    currentAnswers.no_rag = data.no_rag_response !== undefined ? data.no_rag_response : "";
     console.log("已更新答案存储:", currentAnswers);
 }
 
